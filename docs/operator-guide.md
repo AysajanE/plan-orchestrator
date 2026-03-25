@@ -2,6 +2,11 @@
 
 This guide covers the reusable core runtime shipped in `plan-orchestrator`.
 
+For a quick architecture read before going deep on commands and run artifacts, open:
+
+- `docs/assets/plan_orchestrator_workflow.png`
+- `docs/plan_orchestrator_workflow.html`
+
 ## Runtime invariants
 
 The public v1 engine preserves these invariants:

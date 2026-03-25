@@ -39,6 +39,22 @@ See:
 - `docs/playbook-contract.md`
 - `docs/operator-guide.md`
 
+## Workflow visual
+
+For a quick architecture pass, use the rendered workflow visual:
+
+- preview image: `docs/assets/plan_orchestrator_workflow.png`
+- source HTML: `docs/plan_orchestrator_workflow.html`
+
+The image is the fastest way to understand the runtime at a glance.
+The HTML version is the maintainable source artifact and works best when opened in a browser.
+
+<p>
+  <a href="docs/plan_orchestrator_workflow.html">
+    <img src="docs/assets/plan_orchestrator_workflow.png" alt="Plan Orchestrator workflow diagram" width="900">
+  </a>
+</p>
+
 ## Quick start
 
 List items:
