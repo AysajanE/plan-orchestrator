@@ -1,0 +1,420 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:normalized_plan.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "adapter_id",
+    "plan_source",
+    "generated_at_utc",
+    "global_context",
+    "support_sections",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.normalized_plan.v1"
+    },
+    "adapter_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "plan_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "source_kind",
+        "sha256",
+        "title"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "source_kind": {
+          "const": "markdown_playbook_v1"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "title": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "global_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_goal",
+        "immediate_target",
+        "default_runtime_profile",
+        "global_support_section_ids",
+        "notes"
+      ],
+      "properties": {
+        "primary_goal": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "immediate_target": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "default_runtime_profile": {
+          "$ref": "#/$defs/default_runtime_profile"
+        },
+        "global_support_section_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "notes": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    },
+    "support_sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/support_section"
+      }
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "default_runtime_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offline_default",
+        "auto_advance_default",
+        "max_fix_rounds_default",
+        "max_remediation_rounds_default"
+      ],
+      "properties": {
+        "offline_default": {
+          "type": "boolean"
+        },
+        "auto_advance_default": {
+          "type": "boolean"
+        },
+        "max_fix_rounds_default": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_remediation_rounds_default": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "support_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section_id",
+        "title",
+        "section_kind",
+        "body_markdown",
+        "applies_to_phase_slugs"
+      ],
+      "properties": {
+        "section_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "section_kind": {
+          "enum": [
+            "global_context",
+            "phase_detail",
+            "shared_guidance",
+            "risk_register",
+            "informational"
+          ]
+        },
+        "body_markdown": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "applies_to_phase_slugs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "source_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section_title",
+        "row_index",
+        "line_start",
+        "line_end",
+        "raw_row_markdown"
+      ],
+      "properties": {
+        "section_title": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "row_index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "line_start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "line_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "raw_row_markdown": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    },
+    "manual_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "gate_type",
+        "gate_reason",
+        "required_evidence"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "gate_type": {
+          "enum": [
+            "none",
+            "signoff",
+            "approval",
+            "operator_confirmation",
+            "security_review",
+            "presenter_review",
+            "custom"
+          ]
+        },
+        "gate_reason": {
+          "type": "string"
+        },
+        "required_evidence": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    },
+    "external_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "mode",
+        "dependencies"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "none",
+            "human_supplied_evidence_required"
+          ]
+        },
+        "dependencies": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    },
+    "verification_hints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_artifacts",
+        "required_commands",
+        "suggested_commands"
+      ],
+      "properties": {
+        "required_artifacts": {
+          "$ref": "#/$defs/string_list"
+        },
+        "required_commands": {
+          "$ref": "#/$defs/string_list"
+        },
+        "suggested_commands": {
+          "$ref": "#/$defs/string_list"
+        },
+        "materialized_artifact_roots": {
+          "$ref": "#/$defs/string_list"
+        },
+        "pass_resolves_mutation_source_ids": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "order",
+        "phase",
+        "phase_slug",
+        "action",
+        "why_now",
+        "owner_type",
+        "prerequisites_raw",
+        "prerequisite_item_ids",
+        "repo_surfaces_raw",
+        "repo_surface_paths",
+        "external_dependencies_raw",
+        "deliverable",
+        "deliverable_paths",
+        "exit_criteria",
+        "change_profile",
+        "execution_mode",
+        "host_commands",
+        "requires_red_green",
+        "manual_gate",
+        "external_check",
+        "verification_hints",
+        "source_row",
+        "support_section_ids",
+        "consult_paths",
+        "allowed_write_roots",
+        "notes"
+      ],
+      "properties": {
+        "item_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "phase_slug": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "action": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "why_now": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "owner_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "prerequisites_raw": {
+          "type": "string"
+        },
+        "prerequisite_item_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "repo_surfaces_raw": {
+          "$ref": "#/$defs/string_list"
+        },
+        "repo_surface_paths": {
+          "$ref": "#/$defs/string_list"
+        },
+        "external_dependencies_raw": {
+          "$ref": "#/$defs/string_list"
+        },
+        "deliverable": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "deliverable_paths": {
+          "$ref": "#/$defs/string_list"
+        },
+        "exit_criteria": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "change_profile": {
+          "enum": [
+            "docs_only",
+            "behavioral_code",
+            "mixed"
+          ]
+        },
+        "execution_mode": {
+          "enum": [
+            "codex",
+            "host_command"
+          ]
+        },
+        "host_commands": {
+          "$ref": "#/$defs/string_list"
+        },
+        "requires_red_green": {
+          "type": "boolean"
+        },
+        "manual_gate": {
+          "$ref": "#/$defs/manual_gate"
+        },
+        "external_check": {
+          "$ref": "#/$defs/external_check"
+        },
+        "verification_hints": {
+          "$ref": "#/$defs/verification_hints"
+        },
+        "source_row": {
+          "$ref": "#/$defs/source_row"
+        },
+        "support_section_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "consult_paths": {
+          "$ref": "#/$defs/string_list"
+        },
+        "allowed_write_roots": {
+          "$ref": "#/$defs/string_list"
+        },
+        "notes": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:manual_gate.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "requested_at_utc",
+    "run_id",
+    "item_id",
+    "gate_id",
+    "gate_type",
+    "status",
+    "requested_by",
+    "requested_reason",
+    "required_evidence",
+    "review_findings",
+    "related_refs",
+    "decision"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "plan_orchestrator.manual_gate.v1"
+    },
+    "requested_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "gate_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "gate_type": {
+      "enum": [
+        "signoff",
+        "approval",
+        "operator_confirmation",
+        "security_review",
+        "presenter_review",
+        "custom"
+      ]
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ]
+    },
+    "requested_by": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "requested_reason": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "required_evidence": {
+      "$ref": "#/$defs/string_list"
+    },
+    "review_findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/review_finding"
+      }
+    },
+    "related_refs": {
+      "$ref": "#/$defs/related_refs"
+    },
+    "decision": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "decided_at_utc",
+        "decided_by",
+        "note",
+        "evidence_paths"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "decided_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decided_by": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "note": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "evidence_paths": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pending"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "approved"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "const": "approved"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "rejected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "const": "rejected"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_type",
+        "source_id"
+      ],
+      "properties": {
+        "source_type": {
+          "enum": [
+            "codex_audit",
+            "claude_audit",
+            "verification",
+            "mutation_report"
+          ]
+        },
+        "source_id": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "review_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_id",
+        "title",
+        "severity",
+        "category",
+        "disposition",
+        "recommended_owner",
+        "source_refs",
+        "file_paths",
+        "evidence",
+        "recommended_action",
+        "acceptance_check",
+        "is_blocking"
+      ],
+      "properties": {
+        "canonical_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "category": {
+          "enum": [
+            "correctness",
+            "security",
+            "test_gap",
+            "scope",
+            "documentation",
+            "artifact",
+            "process",
+            "manual_gate",
+            "external_dependency",
+            "other"
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "actionable",
+            "false_positive",
+            "duplicate",
+            "out_of_scope",
+            "blocked_external",
+            "requires_human_judgment"
+          ]
+        },
+        "recommended_owner": {
+          "enum": [
+            "codex_fix",
+            "human",
+            "operator_external",
+            "none"
+          ]
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_ref"
+          }
+        },
+        "file_paths": {
+          "$ref": "#/$defs/string_list"
+        },
+        "evidence": {
+          "$ref": "#/$defs/string_list"
+        },
+        "recommended_action": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "acceptance_check": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "is_blocking": {
+          "type": "boolean"
+        }
+      }
+    },
+    "related_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch_name",
+        "worktree_path",
+        "checkpoint_ref",
+        "artifact_manifest_path",
+        "triage_report_path",
+        "merged_findings_packet_path",
+        "codex_audit_report_path",
+        "claude_audit_report_path"
+      ],
+      "properties": {
+        "branch_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worktree_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkpoint_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "artifact_manifest_path": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "triage_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merged_findings_packet_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "codex_audit_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "claude_audit_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

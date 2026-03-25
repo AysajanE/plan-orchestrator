@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:run_state.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "adapter_id",
+    "repo_root",
+    "playbook_source_path",
+    "playbook_source_sha256",
+    "normalized_plan_path",
+    "base_head_sha",
+    "run_branch_name",
+    "created_at_utc",
+    "updated_at_utc",
+    "current_state",
+    "current_item_id",
+    "options",
+    "items",
+    "event_log"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.run_state.v1"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "adapter_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "repo_root": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "playbook_source_path": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "playbook_source_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "normalized_plan_path": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "base_head_sha": {
+      "$ref": "#/$defs/git_sha"
+    },
+    "run_branch_name": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "current_state": {
+      "$ref": "#/$defs/state_id"
+    },
+    "current_item_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "options": {
+      "$ref": "#/$defs/options"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item_state"
+      }
+    },
+    "event_log": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{7,40}$"
+    },
+    "state_id": {
+      "enum": [
+        "ST00_RUN_CREATED",
+        "ST05_PLAN_NORMALIZED",
+        "ST10_ITEM_SELECTED",
+        "ST15_WORKTREE_PREPARED",
+        "ST20_CONTEXT_PREPARED",
+        "ST30_EXECUTING",
+        "ST40_VERIFYING",
+        "ST50_AUDIT_PACKET_READY",
+        "ST60_AUDITING_CODEX",
+        "ST61_AUDITING_CLAUDE",
+        "ST70_TRIAGING",
+        "ST80_FIXING",
+        "ST95_REMEDIATING",
+        "ST110_AWAITING_HUMAN_GATE",
+        "ST120_BLOCKED_EXTERNAL",
+        "ST130_PASSED",
+        "ST140_ESCALATED"
+      ]
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "codex_model",
+        "codex_reasoning_effort",
+        "claude_model",
+        "claude_effort",
+        "auto_advance",
+        "max_items",
+        "max_fix_rounds",
+        "max_remediation_rounds",
+        "execution_timeout_sec",
+        "verification_timeout_sec",
+        "audit_timeout_sec",
+        "triage_timeout_sec",
+        "fix_timeout_sec",
+        "remediation_timeout_sec"
+      ],
+      "properties": {
+        "codex_model": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "codex_reasoning_effort": {
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        "claude_model": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "claude_effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "auto_advance": {
+          "type": "boolean"
+        },
+        "max_items": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "max_fix_rounds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_remediation_rounds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "execution_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "verification_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "audit_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "triage_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fix_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "remediation_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "latest_paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_context_path",
+        "execution_report_path",
+        "verification_report_path",
+        "codex_audit_report_path",
+        "claude_audit_report_path",
+        "triage_report_path",
+        "fix_report_path",
+        "artifact_manifest_path",
+        "manual_gate_path",
+        "escalation_manifest_path"
+      ],
+      "properties": {
+        "item_context_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "execution_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verification_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "codex_audit_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "claude_audit_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "triage_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fix_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "artifact_manifest_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "manual_gate_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "escalation_manifest_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "item_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "order",
+        "state",
+        "attempt_number",
+        "fix_rounds_completed",
+        "remediation_rounds_completed",
+        "manual_gate_status",
+        "external_check_status",
+        "branch_name",
+        "worktree_path",
+        "checkpoint_ref",
+        "terminal_state",
+        "latest_paths",
+        "updated_at_utc"
+      ],
+      "properties": {
+        "item_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "$ref": "#/$defs/state_id"
+        },
+        "attempt_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fix_rounds_completed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "remediation_rounds_completed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manual_gate_status": {
+          "enum": [
+            "not_required",
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "external_check_status": {
+          "enum": [
+            "not_required",
+            "pending_evidence",
+            "resolved"
+          ]
+        },
+        "branch_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worktree_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkpoint_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal_state": {
+          "enum": [
+            "none",
+            "passed",
+            "awaiting_human_gate",
+            "blocked_external",
+            "escalated"
+          ]
+        },
+        "latest_paths": {
+          "$ref": "#/$defs/latest_paths"
+        },
+        "updated_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at_utc",
+        "state",
+        "actor",
+        "message"
+      ],
+      "properties": {
+        "at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "state": {
+          "$ref": "#/$defs/state_id"
+        },
+        "actor": {
+          "enum": [
+            "orchestrator",
+            "codex",
+            "claude",
+            "human",
+            "git",
+            "verification"
+          ]
+        },
+        "message": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    }
+  }
+}

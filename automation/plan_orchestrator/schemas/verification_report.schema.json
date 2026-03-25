@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:verification_report.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at_utc",
+    "stage",
+    "item_id",
+    "attempt_number",
+    "summary",
+    "overall_result",
+    "command_results",
+    "artifact_checks",
+    "scope_check",
+    "next_recommended_state"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.verification_report.v1"
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "stage": {
+      "const": "verify"
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "summary": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "overall_result": {
+      "enum": [
+        "pass",
+        "fail",
+        "partial"
+      ]
+    },
+    "command_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/command_result"
+      }
+    },
+    "artifact_checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact_check_result"
+      }
+    },
+    "scope_check": {
+      "$ref": "#/$defs/scope_check"
+    },
+    "next_recommended_state": {
+      "enum": [
+        "audit",
+        "fix",
+        "awaiting_human_gate",
+        "blocked_external",
+        "escalate"
+      ]
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "command_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "command",
+        "exit_code",
+        "status",
+        "failure_kind",
+        "required",
+        "log_path",
+        "timeout_sec"
+      ],
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "command": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "skipped"
+          ]
+        },
+        "failure_kind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "exit_nonzero",
+            "timeout",
+            null
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "log_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timeout_sec": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      }
+    },
+    "artifact_check_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "check_kind",
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "check_kind": {
+          "enum": [
+            "exists",
+            "contains_substrings",
+            "not_contains_substrings"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "skipped"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    },
+    "scope_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "out_of_scope_paths",
+        "note"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
+        "out_of_scope_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    }
+  }
+}

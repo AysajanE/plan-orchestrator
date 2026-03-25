@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:artifact_manifest.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at_utc",
+    "run_id",
+    "item_id",
+    "attempt_number",
+    "producer_stage",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.artifact_manifest.v1"
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "producer_stage": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256_or_null": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_name",
+        "path",
+        "workspace_packet_path",
+        "content_type",
+        "storage_class",
+        "git_policy",
+        "trust_level",
+        "producer",
+        "consumers",
+        "must_exist",
+        "sha256",
+        "visibility_bridge",
+        "description"
+      ],
+      "properties": {
+        "logical_name": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "path": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "workspace_packet_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_type": {
+          "enum": [
+            "json",
+            "markdown",
+            "text",
+            "log",
+            "diff",
+            "directory",
+            "other"
+          ]
+        },
+        "storage_class": {
+          "enum": [
+            "tracked_repo",
+            "local_run_control",
+            "local_model_report",
+            "human_supplied_local",
+            "item_worktree",
+            "external_reference"
+          ]
+        },
+        "git_policy": {
+          "enum": [
+            "tracked",
+            "gitignored",
+            "local_branch_only",
+            "none"
+          ]
+        },
+        "trust_level": {
+          "enum": [
+            "source_input",
+            "orchestrator_generated",
+            "model_generated",
+            "human_supplied",
+            "external_reference"
+          ]
+        },
+        "producer": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "consumers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "must_exist": {
+          "type": "boolean"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256_or_null"
+        },
+        "visibility_bridge": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "description": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    }
+  }
+}

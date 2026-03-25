@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:audit_report.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "audit_lane",
+    "item_id",
+    "attempt_number",
+    "summary",
+    "overall_verdict",
+    "audited_artifacts",
+    "positive_signals",
+    "limitations",
+    "findings",
+    "next_recommended_state"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "plan_orchestrator.audit_report.v1"
+    },
+    "audit_lane": {
+      "enum": [
+        "codex",
+        "claude"
+      ]
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "summary": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "overall_verdict": {
+      "enum": [
+        "pass",
+        "issues_found",
+        "blocked",
+        "inconclusive"
+      ]
+    },
+    "audited_artifacts": {
+      "$ref": "#/$defs/string_list"
+    },
+    "positive_signals": {
+      "$ref": "#/$defs/string_list"
+    },
+    "limitations": {
+      "$ref": "#/$defs/string_list"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "next_recommended_state": {
+      "enum": [
+        "pass",
+        "triage",
+        "blocked_external",
+        "escalate"
+      ]
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "title",
+        "severity",
+        "category",
+        "confidence",
+        "file_paths",
+        "evidence",
+        "why_it_matters",
+        "recommended_action",
+        "is_blocking"
+      ],
+      "properties": {
+        "finding_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "category": {
+          "enum": [
+            "correctness",
+            "security",
+            "test_gap",
+            "scope",
+            "documentation",
+            "artifact",
+            "process",
+            "manual_gate",
+            "external_dependency",
+            "other"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "file_paths": {
+          "$ref": "#/$defs/string_list"
+        },
+        "evidence": {
+          "$ref": "#/$defs/string_list"
+        },
+        "why_it_matters": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "recommended_action": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "is_blocking": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

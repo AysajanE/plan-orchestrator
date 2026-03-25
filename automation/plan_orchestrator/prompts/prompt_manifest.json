@@ -1,0 +1,127 @@
+{
+  "schema_version": "plan_orchestrator.prompt_manifest.v1",
+  "version": 1,
+  "prompts": [
+    {
+      "name": "execution_codex",
+      "stage": "execute",
+      "path": "automation/plan_orchestrator/prompts/execution_codex.md",
+      "placeholders": [
+        "RUN_ID",
+        "ITEM_ID",
+        "ATTEMPT_NUMBER",
+        "ITEM_PHASE",
+        "ITEM_CHANGE_PROFILE",
+        "ITEM_REQUIRES_RED_GREEN",
+        "WORKTREE_PATH",
+        "WORKSPACE_PACKET_ROOT",
+        "ITEM_CONTEXT_WORKSPACE_PATH",
+        "ARTIFACT_MANIFEST_WORKSPACE_PATH",
+        "PLAYBOOK_SNAPSHOT_WORKSPACE_PATH",
+        "NORMALIZED_PLAN_WORKSPACE_PATH",
+        "CONSULT_PATHS_JSON",
+        "ALLOWED_WRITE_ROOTS_JSON",
+        "FORBIDDEN_ROOTS_JSON",
+        "ITEM_SUMMARY_JSON",
+        "SUPPORT_SECTION_SUMMARY",
+        "EXTERNAL_EVIDENCE_SUMMARY"
+      ]
+    },
+    {
+      "name": "audit_codex",
+      "stage": "audit_codex",
+      "path": "automation/plan_orchestrator/prompts/audit_codex.md",
+      "placeholders": [
+        "RUN_ID",
+        "ITEM_ID",
+        "ATTEMPT_NUMBER",
+        "WORKTREE_PATH",
+        "AUDIT_PACKET_MANIFEST_WORKSPACE_PATH",
+        "CANDIDATE_PATCH_WORKSPACE_PATH",
+        "VERIFICATION_REPORT_WORKSPACE_PATH",
+        "EXECUTION_OR_FIX_REPORT_WORKSPACE_PATH",
+        "PLAYBOOK_SNAPSHOT_WORKSPACE_PATH",
+        "NORMALIZED_PLAN_WORKSPACE_PATH",
+        "AUDIT_SCOPE_NOTES"
+      ]
+    },
+    {
+      "name": "audit_claude",
+      "stage": "audit_claude",
+      "path": "automation/plan_orchestrator/prompts/audit_claude.md",
+      "placeholders": [
+        "RUN_ID",
+        "ITEM_ID",
+        "ATTEMPT_NUMBER",
+        "WORKTREE_PATH",
+        "AUDIT_PACKET_MANIFEST_WORKSPACE_PATH",
+        "CANDIDATE_PATCH_WORKSPACE_PATH",
+        "VERIFICATION_REPORT_WORKSPACE_PATH",
+        "EXECUTION_OR_FIX_REPORT_WORKSPACE_PATH",
+        "PLAYBOOK_SNAPSHOT_WORKSPACE_PATH",
+        "NORMALIZED_PLAN_WORKSPACE_PATH",
+        "AUDIT_SCOPE_NOTES"
+      ]
+    },
+    {
+      "name": "triage_codex",
+      "stage": "triage",
+      "path": "automation/plan_orchestrator/prompts/triage_codex.md",
+      "placeholders": [
+        "RUN_ID",
+        "ITEM_ID",
+        "ATTEMPT_NUMBER",
+        "WORKTREE_PATH",
+        "ARTIFACT_MANIFEST_WORKSPACE_PATH",
+        "MERGED_FINDINGS_WORKSPACE_PATH",
+        "VERIFICATION_REPORT_WORKSPACE_PATH",
+        "CODEX_AUDIT_REPORT_WORKSPACE_PATH",
+        "CLAUDE_AUDIT_REPORT_WORKSPACE_PATH",
+        "ITEM_MANUAL_GATE_REQUIRED",
+        "ITEM_EXTERNAL_CHECK_REQUIRED",
+        "TRIAGE_SCOPE_NOTES"
+      ]
+    },
+    {
+      "name": "fix_codex",
+      "stage": "fix",
+      "path": "automation/plan_orchestrator/prompts/fix_codex.md",
+      "placeholders": [
+        "RUN_ID",
+        "ITEM_ID",
+        "ATTEMPT_NUMBER",
+        "LOOP_ROUND",
+        "WORKTREE_PATH",
+        "WORKSPACE_PACKET_ROOT",
+        "ITEM_CONTEXT_WORKSPACE_PATH",
+        "TRIAGE_REPORT_WORKSPACE_PATH",
+        "SOURCE_FINDING_IDS_JSON",
+        "ALLOWED_WRITE_ROOTS_JSON",
+        "FORBIDDEN_ROOTS_JSON",
+        "ITEM_CHANGE_PROFILE",
+        "ITEM_REQUIRES_RED_GREEN"
+      ]
+    },
+    {
+      "name": "remediation_codex",
+      "stage": "remediation",
+      "path": "automation/plan_orchestrator/prompts/remediation_codex.md",
+      "placeholders": [
+        "RUN_ID",
+        "ITEM_ID",
+        "ATTEMPT_NUMBER",
+        "LOOP_ROUND",
+        "WORKTREE_PATH",
+        "WORKSPACE_PACKET_ROOT",
+        "ITEM_CONTEXT_WORKSPACE_PATH",
+        "TRIAGE_REPORT_WORKSPACE_PATH",
+        "SOURCE_FINDING_IDS_JSON",
+        "ALLOWED_WRITE_ROOTS_JSON",
+        "FORBIDDEN_ROOTS_JSON",
+        "ITEM_CHANGE_PROFILE",
+        "ITEM_REQUIRES_RED_GREEN",
+        "ROUND_HISTORY_SUMMARY"
+      ]
+    }
+  ]
+}

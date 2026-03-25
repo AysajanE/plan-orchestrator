@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:triage_report.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stage",
+    "item_id",
+    "attempt_number",
+    "summary",
+    "overall_decision",
+    "reasoning_notes",
+    "merged_findings",
+    "suppressed_findings",
+    "next_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "plan_orchestrator.triage_report.v1"
+    },
+    "stage": {
+      "type": "string",
+      "const": "triage"
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "summary": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "overall_decision": {
+      "enum": [
+        "pass",
+        "fix_required",
+        "awaiting_human_gate",
+        "blocked_external",
+        "escalate"
+      ]
+    },
+    "reasoning_notes": {
+      "$ref": "#/$defs/string_list"
+    },
+    "merged_findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/merged_finding"
+      }
+    },
+    "suppressed_findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/suppressed_finding"
+      }
+    },
+    "next_stage": {
+      "enum": [
+        "passed",
+        "fix",
+        "awaiting_human_gate",
+        "blocked_external",
+        "escalated"
+      ]
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_type",
+        "source_id"
+      ],
+      "properties": {
+        "source_type": {
+          "enum": [
+            "codex_audit",
+            "claude_audit",
+            "verification",
+            "mutation_report"
+          ]
+        },
+        "source_id": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "merged_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_id",
+        "title",
+        "severity",
+        "category",
+        "disposition",
+        "recommended_owner",
+        "source_refs",
+        "file_paths",
+        "evidence",
+        "recommended_action",
+        "acceptance_check",
+        "is_blocking"
+      ],
+      "properties": {
+        "canonical_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "category": {
+          "enum": [
+            "correctness",
+            "security",
+            "test_gap",
+            "scope",
+            "documentation",
+            "artifact",
+            "process",
+            "manual_gate",
+            "external_dependency",
+            "other"
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "actionable",
+            "false_positive",
+            "duplicate",
+            "out_of_scope",
+            "blocked_external",
+            "requires_human_judgment"
+          ]
+        },
+        "recommended_owner": {
+          "enum": [
+            "codex_fix",
+            "human",
+            "operator_external",
+            "none"
+          ]
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_ref"
+          }
+        },
+        "file_paths": {
+          "$ref": "#/$defs/string_list"
+        },
+        "evidence": {
+          "$ref": "#/$defs/string_list"
+        },
+        "recommended_action": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "acceptance_check": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "is_blocking": {
+          "type": "boolean"
+        }
+      }
+    },
+    "suppressed_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_type",
+        "source_id",
+        "suppression_reason"
+      ],
+      "properties": {
+        "source_type": {
+          "enum": [
+            "codex_audit",
+            "claude_audit",
+            "verification",
+            "mutation_report"
+          ]
+        },
+        "source_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "suppression_reason": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    }
+  }
+}

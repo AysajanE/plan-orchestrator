@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:fix_report.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stage",
+    "item_id",
+    "attempt_number",
+    "loop_round",
+    "summary",
+    "verdict",
+    "source_finding_ids",
+    "files_touched",
+    "artifacts_created",
+    "red_green",
+    "scope_compliance",
+    "residual_open_items",
+    "residual_risks",
+    "next_recommended_state"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "plan_orchestrator.fix_report.v1"
+    },
+    "stage": {
+      "enum": [
+        "fix",
+        "remediation"
+      ]
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "loop_round": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "summary": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "verdict": {
+      "enum": [
+        "changes_applied",
+        "no_change_needed",
+        "blocked",
+        "needs_human_input",
+        "blocked_external"
+      ]
+    },
+    "source_finding_ids": {
+      "$ref": "#/$defs/string_list"
+    },
+    "files_touched": {
+      "$ref": "#/$defs/string_list"
+    },
+    "artifacts_created": {
+      "$ref": "#/$defs/string_list"
+    },
+    "red_green": {
+      "$ref": "#/$defs/red_green"
+    },
+    "scope_compliance": {
+      "$ref": "#/$defs/scope_compliance"
+    },
+    "residual_open_items": {
+      "$ref": "#/$defs/string_list"
+    },
+    "residual_risks": {
+      "$ref": "#/$defs/string_list"
+    },
+    "next_recommended_state": {
+      "enum": [
+        "reverify",
+        "awaiting_human_gate",
+        "blocked_external",
+        "escalate"
+      ]
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "red_green": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "tests_added_or_updated",
+        "red_commands",
+        "red_failure_evidence",
+        "green_commands",
+        "green_pass_evidence"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "tests_added_or_updated": {
+          "$ref": "#/$defs/string_list"
+        },
+        "red_commands": {
+          "$ref": "#/$defs/string_list"
+        },
+        "red_failure_evidence": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "green_commands": {
+          "$ref": "#/$defs/string_list"
+        },
+        "green_pass_evidence": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    },
+    "scope_compliance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "notes",
+        "scope_exceptions"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "within_scope",
+            "scope_exception_required",
+            "scope_violation"
+          ]
+        },
+        "notes": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "scope_exceptions": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    }
+  }
+}

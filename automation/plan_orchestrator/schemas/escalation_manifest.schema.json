@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:escalation_manifest.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at_utc",
+    "terminal_state",
+    "run_id",
+    "item_id",
+    "attempt_number",
+    "summary",
+    "blocking_reasons",
+    "required_human_actions",
+    "preserved_refs",
+    "artifact_manifest_path",
+    "suggested_resume_command",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.escalation_manifest.v1"
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "terminal_state": {
+      "enum": [
+        "awaiting_human_gate",
+        "blocked_external",
+        "escalated"
+      ]
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "summary": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "blocking_reasons": {
+      "$ref": "#/$defs/string_list"
+    },
+    "required_human_actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    },
+    "preserved_refs": {
+      "$ref": "#/$defs/preserved_refs"
+    },
+    "artifact_manifest_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "suggested_resume_command": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "notes": {
+      "$ref": "#/$defs/string_list"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "description",
+        "owner_hint",
+        "evidence_needed",
+        "blocking"
+      ],
+      "properties": {
+        "action_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "description": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "owner_hint": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "evidence_needed": {
+          "$ref": "#/$defs/string_list"
+        },
+        "blocking": {
+          "type": "boolean"
+        }
+      }
+    },
+    "preserved_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch_name",
+        "worktree_path",
+        "checkpoint_ref",
+        "run_state_path",
+        "primary_report_paths"
+      ],
+      "properties": {
+        "branch_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worktree_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkpoint_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run_state_path": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "primary_report_paths": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    }
+  }
+}
