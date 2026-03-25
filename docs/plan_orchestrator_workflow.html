@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan Orchestrator — Architecture &amp; Workflow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+
+  :root {
+    --bg-deep: #0a0e17;
+    --bg-panel: #111827;
+    --bg-card: #1a2236;
+    --bg-card-hover: #1f2a42;
+    --border-dim: #1e2d4a;
+    --border-active: #2563eb;
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34,211,238,0.15);
+    --cyan-glow: rgba(34,211,238,0.3);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,0.15);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96,165,250,0.12);
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-dim: #64748b;
+    --text-accent: var(--cyan);
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --serif: 'Instrument Serif', Georgia, serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 15px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--sans);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ─── Grid Background ────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      linear-gradient(var(--border-dim) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border-dim) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 20%, rgba(34,211,238,0.04) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(96,165,250,0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── Layout ─────────────────────────────────── */
+  .page { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 2rem 2rem 6rem; }
+
+  /* ─── Header ─────────────────────────────────── */
+  .header {
+    text-align: center;
+    padding: 3rem 0 2.5rem;
+    border-bottom: 1px solid var(--border-dim);
+    margin-bottom: 3rem;
+    position: relative;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  }
+  .header .kicker {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 0.75rem;
+    opacity: 0.8;
+  }
+  .header h1 {
+    font-family: var(--serif);
+    font-size: 2.8rem;
+    font-weight: 400;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  .header h1 em {
+    font-style: italic;
+    color: var(--cyan);
+  }
+  .header .subtitle {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin-top: 0.75rem;
+    max-width: 680px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .header .meta {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1.25rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+  .header .meta span::before {
+    content: '▪ ';
+    color: var(--cyan);
+    opacity: 0.5;
+  }
+
+  /* ─── Navigation ─────────────────────────────── */
+  .nav-bar {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 3rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    padding: 1rem 0;
+    background: linear-gradient(to bottom, var(--bg-deep) 60%, transparent);
+  }
+  .nav-btn {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-dim);
+    border-radius: 4px;
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+  }
+  .nav-btn:hover, .nav-btn.active {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: var(--cyan-dim);
+    box-shadow: 0 0 12px rgba(34,211,238,0.08);
+  }
+
+  /* ─── Section ────────────────────────────────── */
+  .section {
+    margin-bottom: 4rem;
+    scroll-margin-top: 5rem;
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    opacity: 0.7;
+    margin-bottom: 0.5rem;
+  }
+  .section-title {
+    font-family: var(--serif);
+    font-size: 1.8rem;
+    font-weight: 400;
+    margin-bottom: 0.5rem;
+  }
+  .section-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    max-width: 720px;
+    margin-bottom: 2rem;
+  }
+
+  /* ─── Pipeline Flow ──────────────────────────── */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    position: relative;
+  }
+
+  .pipeline-connector {
+    width: 2px;
+    height: 28px;
+    background: linear-gradient(to bottom, var(--cyan), var(--cyan-dim));
+    position: relative;
+  }
+  .pipeline-connector.long { height: 40px; }
+  .pipeline-connector::after {
+    content: '';
+    position: absolute;
+    bottom: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--cyan);
+  }
+  .pipeline-connector.no-arrow::after { display: none; }
+
+  .stage-node {
+    background: var(--bg-card);
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+    padding: 1.1rem 1.5rem;
+    width: 100%;
+    max-width: 600px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.25s;
+    overflow: hidden;
+  }
+  .stage-node::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    border-radius: 8px 0 0 8px;
+  }
+  .stage-node:hover {
+    border-color: var(--border-active);
+    background: var(--bg-card-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .stage-node.expanded {
+    max-width: 780px;
+  }
+
+  .stage-node.cyan::before { background: var(--cyan); }
+  .stage-node.green::before { background: var(--green); }
+  .stage-node.amber::before { background: var(--amber); }
+  .stage-node.red::before { background: var(--red); }
+  .stage-node.purple::before { background: var(--purple); }
+  .stage-node.blue::before { background: var(--blue); }
+
+  .stage-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .stage-id {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .stage-node.cyan .stage-id { background: var(--cyan-dim); color: var(--cyan); }
+  .stage-node.green .stage-id { background: var(--green-dim); color: var(--green); }
+  .stage-node.amber .stage-id { background: var(--amber-dim); color: var(--amber); }
+  .stage-node.red .stage-id { background: var(--red-dim); color: var(--red); }
+  .stage-node.purple .stage-id { background: var(--purple-dim); color: var(--purple); }
+  .stage-node.blue .stage-id { background: var(--blue-dim); color: var(--blue); }
+
+  .stage-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    flex-grow: 1;
+  }
+  .stage-badge {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.05);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .stage-expand-icon {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .stage-node.expanded .stage-expand-icon { transform: rotate(180deg); }
+
+  .stage-detail {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border-dim);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .stage-node.expanded .stage-detail { display: block; }
+
+  .stage-detail strong { color: var(--text-primary); font-weight: 600; }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 1.5rem;
+    margin-top: 0.5rem;
+  }
+  @media (max-width: 640px) { .detail-grid { grid-template-columns: 1fr; } }
+
+  .detail-item {
+    display: flex;
+    gap: 0.4rem;
+    align-items: baseline;
+  }
+  .detail-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .detail-value {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+  }
+  .detail-value.file { color: var(--cyan); opacity: 0.8; }
+
+  /* ─── Decision Diamond ───────────────────────── */
+  .decision-zone {
+    background: var(--bg-card);
+    border: 2px dashed var(--amber);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    width: 100%;
+    max-width: 780px;
+    position: relative;
+  }
+  .decision-zone .zone-title {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--amber);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+  .decision-branches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 0.6rem;
+  }
+  .decision-branch {
+    border: 1px solid var(--border-dim);
+    border-radius: 6px;
+    padding: 0.7rem 0.8rem;
+    text-align: center;
+    font-size: 0.78rem;
+    transition: all 0.2s;
+    cursor: default;
+  }
+  .decision-branch .branch-label {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+  }
+  .decision-branch .branch-target {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+  .decision-branch.pass { border-color: var(--green); background: var(--green-dim); }
+  .decision-branch.pass .branch-label { color: var(--green); }
+  .decision-branch.fix { border-color: var(--blue); background: var(--blue-dim); }
+  .decision-branch.fix .branch-label { color: var(--blue); }
+  .decision-branch.gate { border-color: var(--amber); background: var(--amber-dim); }
+  .decision-branch.gate .branch-label { color: var(--amber); }
+  .decision-branch.blocked { border-color: var(--purple); background: var(--purple-dim); }
+  .decision-branch.blocked .branch-label { color: var(--purple); }
+  .decision-branch.escalated { border-color: var(--red); background: var(--red-dim); }
+  .decision-branch.escalated .branch-label { color: var(--red); }
+
+  /* ─── Loop Annotation ────────────────────────── */
+  .loop-bracket {
+    position: relative;
+    width: 100%;
+    max-width: 660px;
+    margin: -0.5rem auto;
+  }
+  .loop-bracket .bracket-line {
+    position: absolute;
+    right: -36px;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    border: 2px solid var(--blue);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    opacity: 0.4;
+  }
+  .loop-bracket .bracket-label {
+    position: absolute;
+    right: -110px;
+    top: 50%;
+    transform: translateY(-50%) rotate(90deg);
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: var(--blue);
+    opacity: 0.6;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* ─── Component Grid ─────────────────────────── */
+  .comp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+  .comp-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+    padding: 1.2rem;
+    transition: all 0.2s;
+  }
+  .comp-card:hover {
+    border-color: var(--border-active);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  }
+  .comp-card .comp-name {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-accent);
+    margin-bottom: 0.15rem;
+  }
+  .comp-card .comp-file {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-bottom: 0.6rem;
+  }
+  .comp-card .comp-desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .comp-card .comp-role {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    margin-top: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .comp-card .comp-role.core { background: var(--cyan-dim); color: var(--cyan); }
+  .comp-card .comp-role.infra { background: var(--blue-dim); color: var(--blue); }
+  .comp-card .comp-role.safety { background: var(--red-dim); color: var(--red); }
+  .comp-card .comp-role.adapter { background: var(--purple-dim); color: var(--purple); }
+  .comp-card .comp-role.io { background: var(--amber-dim); color: var(--amber); }
+
+  /* ─── State Machine ──────────────────────────── */
+  .sm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+  .sm-table th {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border-dim);
+    background: var(--bg-panel);
+    position: sticky;
+    top: 3.5rem;
+    z-index: 10;
+  }
+  .sm-table td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid rgba(30,45,74,0.5);
+    vertical-align: top;
+  }
+  .sm-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .sm-table .state-code {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .sm-table .transitions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .sm-table .transition-tag {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    padding: 0.12rem 0.4rem;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .sm-table .transition-tag.terminal { background: var(--red-dim); color: var(--red); }
+
+  /* ─── CLI Reference ──────────────────────────── */
+  .cli-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .cli-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 1.2rem;
+    align-items: start;
+  }
+  .cli-cmd {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--green);
+    white-space: nowrap;
+    grid-row: 1/3;
+    padding-top: 0.1rem;
+  }
+  .cli-desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+  .cli-flags {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+  }
+
+  /* ─── Artifact Legend ────────────────────────── */
+  .legend-row {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding: 1rem 1.2rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+  .legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ─── Scroll fade ────────────────────────────── */
+  .section { animation: fadeUp 0.5s ease both; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Flow annotation tags ───────────────────── */
+  .flow-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+  .flow-tag.codex { background: var(--cyan-dim); color: var(--cyan); }
+  .flow-tag.claude { background: var(--purple-dim); color: var(--purple); }
+  .flow-tag.git { background: var(--green-dim); color: var(--green); }
+  .flow-tag.orch { background: var(--blue-dim); color: var(--blue); }
+  .flow-tag.human { background: var(--amber-dim); color: var(--amber); }
+
+  /* ─── Responsive ─────────────────────────────── */
+  @media (max-width: 768px) {
+    .page { padding: 1rem; }
+    .header h1 { font-size: 2rem; }
+    .header .meta { flex-direction: column; gap: 0.4rem; }
+    .nav-bar { gap: 0.35rem; }
+    .nav-btn { font-size: 0.65rem; padding: 0.4rem 0.7rem; }
+    .comp-grid { grid-template-columns: 1fr; }
+    .decision-branches { grid-template-columns: 1fr 1fr; }
+    .loop-bracket .bracket-line,
+    .loop-bracket .bracket-label { display: none; }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ═══════════════ HEADER ═══════════════ -->
+  <header class="header">
+    <div class="kicker">plan-orchestrator · public v1 runtime</div>
+    <h1>Plan <em>Orchestrator</em> Workflow</h1>
+    <p class="subtitle">
+      A resumable, multi-stage pipeline that reads one approved
+      <code>markdown_playbook_v1</code>, normalizes it into a runtime manifest,
+      and executes items through isolated git worktrees with verification,
+      dual audit, deterministic findings merge, and bounded repair loops.
+    </p>
+    <div class="meta">
+      <span>automation/plan_orchestrator/</span>
+      <span>17 FSM states</span>
+      <span>markdown_playbook_v1 input</span>
+      <span>Codex + Claude dual audit</span>
+      <span>Git worktree isolation</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════ NAV ═══════════════ -->
+  <nav class="nav-bar">
+    <a href="#overview" class="nav-btn active">Pipeline Overview</a>
+    <a href="#item-loop" class="nav-btn">Per-Item Loop</a>
+    <a href="#states" class="nav-btn">State Machine</a>
+    <a href="#components" class="nav-btn">Components</a>
+    <a href="#cli" class="nav-btn">CLI Reference</a>
+    <a href="#artifacts" class="nav-btn">Artifacts &amp; Schemas</a>
+  </nav>
+
+  <!-- ═══════════════ 1. PIPELINE OVERVIEW ═══════════════ -->
+  <section class="section" id="overview">
+    <div class="section-label">Section 01</div>
+    <h2 class="section-title">High-Level Pipeline</h2>
+    <p class="section-desc">
+      The orchestrator reads one approved <code>markdown_playbook_v1</code> file,
+      normalizes it into structured plan items via the public adapter, then processes
+      each item through an isolated execution → verification → audit → triage cycle.
+      Click any stage to see implementation details.
+    </p>
+
+    <div class="detail-grid" style="margin:1rem 0 1.35rem; max-width:1040px;">
+      <div class="detail-item">
+        <span class="detail-label">Canonical Input</span>
+        <span class="detail-value">One approved <code>markdown_playbook_v1</code> file</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Mutation Lane</span>
+        <span class="detail-value"><code>codex exec</code> only in public v1</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Evidence Posture</span>
+        <span class="detail-value">Local/offline-first; no implicit web browsing</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Resume Model</span>
+        <span class="detail-value">Blocked or escalated items resume as fresh attempts</span>
+      </div>
+    </div>
+
+    <div class="pipeline">
+
+      <!-- ST00 -->
+      <div class="stage-node cyan" onclick="toggleExpand(this)">
+        <div class="stage-header">
+          <span class="stage-id">ST00</span>
+          <span class="stage-name">CLI Invocation &amp; Preflight</span>
+          <span class="flow-tag orch">orchestrator</span>
+          <span class="stage-expand-icon">▾</span>
+        </div>
+        <div class="stage-detail">
+          <p>Entry via <strong>run_plan_orchestrator.py</strong> → <strong>cli.py:main()</strong>. Parses CLI args, resolves repo root, instantiates <strong>PlanOrchestrator</strong>.</p>
+          <p style="margin-top:0.5rem"><strong>Preflight checks:</strong></p>
+          <div class="detail-grid">
+            <div class="detail-item"><span class="detail-label">Clean env</span><span class="detail-value">No ambient agent config unless <code>PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1</code></span></div>
+            <div class="detail-item"><span class="detail-label">Git clean</span><span class="detail-value">Tracked checkout has no dirty files</span></div>
+            <div class="detail-item"><span class="detail-label">Git identity</span><span class="detail-value">user.name and user.email configured</span></div>
+            <div class="detail-item"><span class="detail-label">Toolchain</span><span class="detail-value">git, codex, claude all in PATH</span></div>
+          </div>
+          <div style="margin-top:0.6rem">
+            <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">cli.py → config.py → worktree_manager.py</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector"></div>
+
+      <!-- ST05 -->
+      <div class="stage-node cyan" onclick="toggleExpand(this)">
+        <div class="stage-header">
+          <span class="stage-id">ST05</span>
+          <span class="stage-name">Playbook Parse &amp; Normalize</span>
+          <span class="flow-tag orch">orchestrator</span>
+          <span class="stage-expand-icon">▾</span>
+        </div>
+        <div class="stage-detail">
+          <p>The approved <code>markdown_playbook_v1</code> file is parsed into numbered sections and an ordered execution table. The public <strong>MarkdownPlaybookAdapter</strong> transforms raw rows into <strong>NormalizedPlan</strong> objects with explicit authored-vs-derived boundaries.</p>
+          <p style="margin-top:0.5rem"><strong>Adapter responsibilities:</strong></p>
+          <ul style="margin-top:0.3rem; padding-left:1.2rem; color:var(--text-secondary)">
+            <li>Parse prerequisites (e.g., "1-5" → [01,02,03,04,05])</li>
+            <li>Derive change_profile (behavioral_code / docs_only / mixed)</li>
+            <li>Keep <code>allowed_write_roots</code> and <code>requires_red_green</code> as authored playbook fields</li>
+            <li>Keep <code>execution_mode=codex</code> and <code>host_commands=[]</code> as derived public-v1 runtime fields</li>
+            <li>Attach support sections by phase slug</li>
+            <li>Map manual gates and external checks per item</li>
+            <li>Normalize verification hints and repo-relative paths from the markdown contract</li>
+          </ul>
+          <div style="margin-top:0.6rem">
+            <div class="detail-item"><span class="detail-label">Output</span><span class="detail-value">NormalizedPlan JSON (schema-validated)</span></div>
+            <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">playbook_parser.py → adapters/markdown_playbook.py → models.py</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector"></div>
+
+      <!-- Run State + Branch -->
+      <div class="stage-node green" onclick="toggleExpand(this)">
+        <div class="stage-header">
+          <span class="stage-id">INIT</span>
+          <span class="stage-name">Run State &amp; Branch Creation</span>
+          <span class="flow-tag git">git</span>
+          <span class="stage-expand-icon">▾</span>
+        </div>
+        <div class="stage-detail">
+          <p>Creates a unique <strong>run_id</strong> (timestamp + UUID), initializes <strong>RunState</strong> with <strong>ItemRunState</strong> for every plan item, and creates a git branch <code>orchestrator/run/{run_id}</code> at current HEAD.</p>
+          <div class="detail-grid" style="margin-top:0.5rem">
+            <div class="detail-item"><span class="detail-label">Run ID</span><span class="detail-value">RUN_YYYYMMDDTHHMMSSz_{uuid}</span></div>
+            <div class="detail-item"><span class="detail-label">Storage</span><span class="detail-value">.local/automation/plan_orchestrator/runs/{id}/</span></div>
+            <div class="detail-item"><span class="detail-label">Reports</span><span class="detail-value">.local/ai/plan_orchestrator/runs/{id}/</span></div>
+            <div class="detail-item"><span class="detail-label">Schema</span><span class="detail-value file">run_state.schema.json</span></div>
+          </div>
+          <div style="margin-top:0.6rem">
+            <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">state_store.py → config.py → worktree_manager.py</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector"></div>
+
+      <!-- Item Selection -->
+      <div class="stage-node blue" onclick="toggleExpand(this)">
+        <div class="stage-header">
+          <span class="stage-id">RESOLVE</span>
+          <span class="stage-name">Resolve Requested Items</span>
+          <span class="flow-tag orch">orchestrator</span>
+          <span class="stage-expand-icon">▾</span>
+        </div>
+        <div class="stage-detail">
+          <p>Resolves which items to process based on CLI input: <code>--item</code> (single), <code>--items</code> (comma-separated), or <code>--next</code> (first unfinished with prerequisites met).</p>
+          <p style="margin-top:0.5rem"><strong>Prerequisite checks:</strong> Each item's <code>prerequisite_item_ids</code> must all have <code>terminal_state == "passed"</code> before it can run. The orchestrator refuses to start items with unmet prerequisites.</p>
+          <p style="margin-top:0.5rem"><strong>Auto-advance:</strong> With <code>--auto-advance</code>, after an item passes, the orchestrator automatically selects the next eligible item up to <code>--max-items</code>.</p>
+          <div style="margin-top:0.6rem">
+            <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">runtime.py → state_machine.py</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector long"></div>
+
+      <!-- Item Loop Entry -->
+      <div style="background: var(--bg-panel); border: 2px solid var(--cyan); border-radius: 8px; padding: 0.6rem 1.5rem; text-align: center; font-family: var(--mono); font-size: 0.75rem; font-weight: 600; color: var(--cyan); letter-spacing: 0.1em; text-transform: uppercase;">
+        ▼ Per-Item Processing Loop ▼
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════ 2. PER-ITEM LOOP ═══════════════ -->
+  <section class="section" id="item-loop">
+    <div class="section-label">Section 02</div>
+    <h2 class="section-title">Per-Item Processing Loop</h2>
+    <p class="section-desc">
+      Each item is processed in an isolated git worktree through mutation → verification → dual audit → triage.
+      Failed triage routes to fix/remediation rounds (looping back), or to terminal states.
+    </p>
+
+    <div class="pipeline">
+
+      <!-- ST10 -->
+      <div class="stage-node blue" onclick="toggleExpand(this)">
+        <div class="stage-header">
+          <span class="stage-id">ST10</span>
+          <span class="stage-name">Item Selected</span>
+          <span class="flow-tag orch">orchestrator</span>
+          <span class="stage-expand-icon">▾</span>
+        </div>
+        <div class="stage-detail">
+          <p>Validates prerequisites are satisfied. If the item requires <strong>external evidence</strong> and none is provided, immediately transitions to <strong>ST120 BLOCKED_EXTERNAL</strong>. Otherwise, proceeds to worktree preparation.</p>
+          <div class="detail-grid" style="margin-top:0.5rem">
+            <div class="detail-item"><span class="detail-label">Guard</span><span class="detail-value">prerequisites_satisfied()</span></div>
+            <div class="detail-item"><span class="detail-label">Guard</span><span class="detail-value">repo input availability check</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector"></div>
+
+      <!-- ST15 -->
+      <div class="stage-node green" onclick="toggleExpand(this)">
+        <div class="stage-header">
+          <span class="stage-id">ST15</span>
+          <span class="stage-name">Worktree Prepared</span>
+          <span class="flow-tag git">git</span>
+          <span class="stage-expand-icon">▾</span>
+        </div>
+        <div class="stage-detail">
+          <p>Creates an isolated <strong>git worktree</strong> branched from the run branch. Each item+attempt gets its own branch: <code>orchestrator/item/{run_id}/{item_id}/attempt-{n}</code>.</p>
+          <p style="margin-top:0.5rem">The worktree contains a <code>.local/plan_orchestrator/packet/</code> directory where non-tracked artifacts (audit reports, playbook snapshots) are materialized as SHA256-pinned copies visible to the mutation agent.</p>
+          <div class="detail-grid" style="margin-top:0.5rem">
+            <div class="detail-item"><span class="detail-label">Branch</span><span class="detail-value">orchestrator/item/{run}/{id}/attempt-{n}</span></div>
+            <div class="detail-item"><span class="detail-label">Location</span><span class="detail-value">.local/.../worktrees/{run_id}/item-{id}-attempt-{n}/</span></div>
+            <div class="detail-item"><span class="detail-label">Isolation</span><span class="detail-value">Linked git worktree checkout from the run branch</span></div>
+            <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">worktree_manager.py</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector"></div>
+
+      <!-- ST20 -->
+      <div class="stage-node cyan" onclick="toggleExpand(this)">
+        <div class="stage-header">
+          <span class="stage-id">ST20</span>
+          <span class="stage-name">Context Prepared</span>
+          <span class="flow-tag orch">orchestrator</span>
+          <span class="stage-expand-icon">▾</span>
+        </div>
+        <div class="stage-detail">
+          <p>Builds an <strong>ItemContext</strong> JSON containing everything the execution agent needs: item metadata, verification plan, repo scope constraints, support sections, and artifact input references.</p>
+          <p style="margin-top:0.5rem">Also builds the <strong>artifact manifest</strong> (with SHA256-pinned copies of all inputs) and renders the <strong>prompt</strong> from a Mustache-like template.</p>
+          <div class="detail-grid" style="margin-top:0.5rem">
+            <div class="detail-item"><span class="detail-label">Context</span><span class="detail-value file">item_context.schema.json</span></div>
+            <div class="detail-item"><span class="detail-label">Manifest</span><span class="detail-value file">artifact_manifest.schema.json</span></div>
+            <div class="detail-item"><span class="detail-label">Prompt</span><span class="detail-value file">prompts/execution_codex.md</span></div>
+            <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">runtime.py → reporting.py</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector"></div>
+
+      <!-- Mutation+Verify Block (with loop bracket) -->
+      <div class="loop-bracket" style="position:relative">
+        <div class="bracket-line"></div>
+        <div class="bracket-label">Fix / Remediation Loop</div>
+
+        <!-- ST30 -->
+        <div class="stage-node cyan" onclick="toggleExpand(this)">
+          <div class="stage-header">
+            <span class="stage-id">ST30</span>
+            <span class="stage-name">Mutation Stage (Execute / Fix / Remediation)</span>
+            <span class="flow-tag codex">codex</span>
+            <span class="stage-badge">write sandbox</span>
+            <span class="stage-expand-icon">▾</span>
+          </div>
+          <div class="stage-detail">
+            <p>Invokes <strong>Codex</strong> in <code>workspace-write</code> sandbox mode with the rendered prompt and output schema. The agent reads the item context packet, performs the required work (code changes, doc creation), and produces a structured report.</p>
+            <p style="margin-top:0.5rem"><strong>Three mutation variants:</strong></p>
+            <ul style="padding-left:1.2rem; color:var(--text-secondary)">
+              <li><strong>execute</strong> — initial implementation (prompt: <code>execution_codex.md</code>)</li>
+              <li><strong>fix</strong> — address actionable findings from triage (prompt: <code>fix_codex.md</code>)</li>
+              <li><strong>remediation</strong> — deeper remediation after fix budget exhausted (prompt: <code>remediation_codex.md</code>)</li>
+            </ul>
+            <p style="margin-top:0.5rem">After Codex finishes, the orchestrator runs a <strong>scope check</strong> (no forbidden paths, no out-of-scope changes), stages allowed changes, and creates a <strong>checkpoint commit</strong>.</p>
+            <div class="detail-grid" style="margin-top:0.5rem">
+              <div class="detail-item"><span class="detail-label">Default timeout</span><span class="detail-value">2h execute, 1.5h fix/remediation</span></div>
+              <div class="detail-item"><span class="detail-label">Sandbox</span><span class="detail-value">codex exec -s workspace-write</span></div>
+              <div class="detail-item"><span class="detail-label">Output</span><span class="detail-value file">execution_report.schema.json</span></div>
+              <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">subprocess_runner.py → git_checkpoint.py</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-connector"></div>
+
+        <!-- ST40 -->
+        <div class="stage-node green" onclick="toggleExpand(this)">
+          <div class="stage-header">
+            <span class="stage-id">ST40</span>
+            <span class="stage-name">Verification Gate</span>
+            <span class="flow-tag orch">orchestrator</span>
+            <span class="stage-badge">deterministic</span>
+            <span class="stage-expand-icon">▾</span>
+          </div>
+          <div class="stage-detail">
+            <p>Runs the verification plan defined in the item context:</p>
+            <ol style="padding-left:1.2rem; color:var(--text-secondary); margin-top:0.3rem">
+              <li><strong>Command groups</strong> — shell commands (e.g., <code>forge test</code>) with required/optional classification</li>
+              <li><strong>Artifact checks</strong> — file existence and content substring checks for deliverables</li>
+              <li><strong>Scope check</strong> — verifies committed changes stay within <code>allowed_write_roots</code></li>
+            </ol>
+            <p style="margin-top:0.5rem">Also asserts <strong>checkpoint authority</strong>: HEAD must not have drifted from the checkpoint commit, and the worktree must be clean.</p>
+            <div class="detail-grid" style="margin-top:0.5rem">
+              <div class="detail-item"><span class="detail-label">Default timeout</span><span class="detail-value">1h per command</span></div>
+              <div class="detail-item"><span class="detail-label">Output</span><span class="detail-value file">verification_report.schema.json</span></div>
+              <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">verification.py → git_checkpoint.py</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-connector"></div>
+
+        <!-- ST50 -->
+        <div class="stage-node cyan" onclick="toggleExpand(this)">
+          <div class="stage-header">
+            <span class="stage-id">ST50</span>
+            <span class="stage-name">Audit Packet Assembly</span>
+            <span class="flow-tag orch">orchestrator</span>
+            <span class="stage-expand-icon">▾</span>
+          </div>
+          <div class="stage-detail">
+            <p>Assembles the <strong>audit packet</strong>: a SHA256-pinned manifest of all artifacts needed for review (candidate patch, verification report, mutation report, playbook snapshot, normalized plan). Artifacts are materialized as packet copies inside the worktree.</p>
+            <p style="margin-top:0.5rem">Generates separate prompts for the Codex and Claude auditors from templates, referencing the audit packet manifest paths.</p>
+            <div class="detail-grid" style="margin-top:0.5rem">
+              <div class="detail-item"><span class="detail-label">Artifact</span><span class="detail-value">candidate.{cycle}.patch</span></div>
+              <div class="detail-item"><span class="detail-label">Prompts</span><span class="detail-value file">audit_codex.md, audit_claude.md</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-connector"></div>
+
+        <!-- ST60 + ST61 -->
+        <div class="stage-node purple" onclick="toggleExpand(this)">
+          <div class="stage-header">
+            <span class="stage-id">ST60→61</span>
+            <span class="stage-name">Dual-Model Audit</span>
+            <span class="flow-tag codex">codex</span>
+            <span class="flow-tag claude">claude</span>
+            <span class="stage-badge">read-only</span>
+            <span class="stage-expand-icon">▾</span>
+          </div>
+          <div class="stage-detail">
+            <p>Two independent auditors review the frozen checkpoint — neither can modify the worktree:</p>
+            <ul style="padding-left:1.2rem; color:var(--text-secondary); margin-top:0.3rem">
+              <li><strong>ST60 — Codex Audit:</strong> <code>codex exec</code> in <code>read-only</code> sandbox. Reviews patch, verification results, and playbook compliance.</li>
+              <li><strong>ST61 — Claude Audit:</strong> <code>claude -p</code> in <code>plan</code> permission mode with Read/Glob/Grep tools only. Independent review with alternate report normalization.</li>
+            </ul>
+            <p style="margin-top:0.5rem">Both produce structured findings with severity, category, confidence, evidence, and recommended_action.</p>
+            <div class="detail-grid" style="margin-top:0.5rem">
+              <div class="detail-item"><span class="detail-label">Output</span><span class="detail-value file">audit_report.schema.json</span></div>
+              <div class="detail-item"><span class="detail-label">Codex model</span><span class="detail-value">gpt-5.4 (xhigh)</span></div>
+              <div class="detail-item"><span class="detail-label">Claude model</span><span class="detail-value">opus (max effort)</span></div>
+              <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">subprocess_runner.py</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-connector"></div>
+
+        <!-- Findings Merge -->
+        <div class="stage-node cyan" onclick="toggleExpand(this)">
+          <div class="stage-header">
+            <span class="stage-id">MERGE</span>
+            <span class="stage-name">Deterministic Findings Merge</span>
+            <span class="flow-tag orch">orchestrator</span>
+            <span class="stage-badge">deterministic</span>
+            <span class="stage-expand-icon">▾</span>
+          </div>
+          <div class="stage-detail">
+            <p>Merges findings from <strong>four sources</strong>: Codex audit, Claude audit, verification failures, and mutation report signals. Each finding receives a deterministic <strong>canonical_id</strong> via SHA256 hashing of (title, category, file_paths, evidence).</p>
+            <p style="margin-top:0.5rem">Duplicate findings across sources are merged by canonical_id (source_refs are combined, is_blocking is OR'd). Mutation report signals (blocked_external, needs_human_input, escalate, unresolved_items) generate synthetic findings.</p>
+            <div class="detail-grid" style="margin-top:0.5rem">
+              <div class="detail-item"><span class="detail-label">Dedup</span><span class="detail-value">canonical_id = SHA256(title+category+paths+evidence)[:16]</span></div>
+              <div class="detail-item"><span class="detail-label">Output</span><span class="detail-value">merged_findings_packet.json</span></div>
+              <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">findings.py</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-connector"></div>
+
+        <!-- ST70 -->
+        <div class="stage-node amber" onclick="toggleExpand(this)">
+          <div class="stage-header">
+            <span class="stage-id">ST70</span>
+            <span class="stage-name">Triage</span>
+            <span class="flow-tag codex">codex</span>
+            <span class="stage-badge">read-only</span>
+            <span class="stage-expand-icon">▾</span>
+          </div>
+          <div class="stage-detail">
+            <p>A Codex agent in read-only mode reviews all merged findings and produces an <strong>overall_decision</strong>. The orchestrator then <strong>preserves mutation-stage control signals</strong> — if the mutation report requested blocked_external or escalation, the triage decision is overridden to match.</p>
+            <p style="margin-top:0.5rem">Additionally, blocking repo-content findings from audit/verification that triage tried to pass are forcibly preserved as <code>fix_required</code>.</p>
+            <div class="detail-grid" style="margin-top:0.5rem">
+              <div class="detail-item"><span class="detail-label">Output</span><span class="detail-value file">triage_report.schema.json</span></div>
+              <div class="detail-item"><span class="detail-label">Prompt</span><span class="detail-value file">triage_codex.md</span></div>
+              <div class="detail-item"><span class="detail-label">Module</span><span class="detail-value file">runtime.py (_preserve_mutation_control_handoff)</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end loop bracket -->
+
+      <div class="pipeline-connector long"></div>
+
+      <!-- Decision Zone -->
+      <div class="decision-zone">
+        <div class="zone-title">◆ Triage Decision Routing ◆</div>
+        <div class="decision-branches">
+          <div class="decision-branch pass">
+            <div class="branch-label">Pass</div>
+            <div class="branch-target">→ ST130 Passed<br><span style="font-size:0.65rem;opacity:0.7">(or ST110 if manual gate required)</span></div>
+          </div>
+          <div class="decision-branch fix">
+            <div class="branch-label">Fix Required</div>
+            <div class="branch-target">→ ST80 Fixing<br><span style="font-size:0.65rem;opacity:0.7">(loops back to ST40, max 2 rounds)</span></div>
+          </div>
+          <div class="decision-branch fix">
+            <div class="branch-label">Remediation</div>
+            <div class="branch-target">→ ST95 Remediating<br><span style="font-size:0.65rem;opacity:0.7">(after fix budget exhausted, max 1)</span></div>
+          </div>
+          <div class="decision-branch gate">
+            <div class="branch-label">Human Gate</div>
+            <div class="branch-target">→ ST110 Awaiting<br><span style="font-size:0.65rem;opacity:0.7">(terminal until mark-manual-gate)</span></div>
+          </div>
+          <div class="decision-branch blocked">
+            <div class="branch-label">Blocked External</div>
+            <div class="branch-target">→ ST120 Blocked<br><span style="font-size:0.65rem;opacity:0.7">(needs --external-evidence-dir)</span></div>
+          </div>
+          <div class="decision-branch escalated">
+            <div class="branch-label">Escalate</div>
+            <div class="branch-target">→ ST140 Escalated<br><span style="font-size:0.65rem;opacity:0.7">(human inspection required)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline-connector long"></div>
+
+      <!-- Terminal States -->
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:0.75rem; width:100%; max-width:780px;">
+        <div class="stage-node green" onclick="toggleExpand(this)" style="cursor:default">
+          <div class="stage-header">
+            <span class="stage-id">ST130</span>
+            <span class="stage-name">Passed</span>
+          </div>
+          <div class="stage-detail" style="display:block; margin-top:0.5rem; border-top:none; padding-top:0;">
+            <p style="font-size:0.78rem">Run branch fast-forwarded to item checkpoint. If <code>--auto-advance</code>, selects next eligible item.</p>
+          </div>
+        </div>
+
+        <div class="stage-node amber" onclick="toggleExpand(this)" style="cursor:default">
+          <div class="stage-header">
+            <span class="stage-id">ST110</span>
+            <span class="stage-name">Human Gate</span>
+          </div>
+          <div class="stage-detail" style="display:block; margin-top:0.5rem; border-top:none; padding-top:0;">
+            <p style="font-size:0.78rem">Produces <code>manual_gate.json</code> with review findings. Resolved via <code>mark-manual-gate</code> CLI.</p>
+          </div>
+        </div>
+
+        <div class="stage-node purple" onclick="toggleExpand(this)" style="cursor:default">
+          <div class="stage-header">
+            <span class="stage-id">ST120</span>
+            <span class="stage-name">Blocked External</span>
+          </div>
+          <div class="stage-detail" style="display:block; margin-top:0.5rem; border-top:none; padding-top:0;">
+            <p style="font-size:0.78rem">Needs external evidence. Resume with <code>--external-evidence-dir</code>.</p>
+          </div>
+        </div>
+
+        <div class="stage-node red" onclick="toggleExpand(this)" style="cursor:default">
+          <div class="stage-header">
+            <span class="stage-id">ST140</span>
+            <span class="stage-name">Escalated</span>
+          </div>
+          <div class="stage-detail" style="display:block; margin-top:0.5rem; border-top:none; padding-top:0;">
+            <p style="font-size:0.78rem">Produces <code>escalation_manifest.json</code>. Human must inspect and decide next action.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════ 3. STATE MACHINE ═══════════════ -->
+  <section class="section" id="states">
+    <div class="section-label">Section 03</div>
+    <h2 class="section-title">State Machine</h2>
+    <p class="section-desc">
+      Complete transition table for the 17-state finite state machine defined in <code>state_machine.py</code>.
+      ST120 (Blocked) and ST140 (Escalated) are absorbing states inside a single item attempt, but operators can resume them into a fresh attempt.
+    </p>
+
+    <div style="overflow-x:auto; border: 1px solid var(--border-dim); border-radius: 8px;">
+      <table class="sm-table">
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>ID</th>
+            <th>Actor</th>
+            <th>Allowed Transitions →</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="state-code" style="color:var(--cyan)">ST00_RUN_CREATED</td>
+            <td>Run created</td>
+            <td><span class="flow-tag orch">orch</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST05</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--cyan)">ST05_PLAN_NORMALIZED</td>
+            <td>Plan normalized</td>
+            <td><span class="flow-tag orch">orch</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST10</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--blue)">ST10_ITEM_SELECTED</td>
+            <td>Item selected</td>
+            <td><span class="flow-tag orch">orch</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST15</span><span class="transition-tag terminal">ST120</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--green)">ST15_WORKTREE_PREPARED</td>
+            <td>Worktree ready</td>
+            <td><span class="flow-tag git">git</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST20</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--cyan)">ST20_CONTEXT_PREPARED</td>
+            <td>Context ready</td>
+            <td><span class="flow-tag orch">orch</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST30</span><span class="transition-tag terminal">ST120</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--cyan)">ST30_EXECUTING</td>
+            <td>Mutation running</td>
+            <td><span class="flow-tag codex">codex</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST40</span><span class="transition-tag terminal">ST120</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--green)">ST40_VERIFYING</td>
+            <td>Verification</td>
+            <td><span class="flow-tag orch">orch</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST50</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--cyan)">ST50_AUDIT_PACKET_READY</td>
+            <td>Audit packet</td>
+            <td><span class="flow-tag orch">orch</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST60</span><span class="transition-tag">ST61</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--purple)">ST60_AUDITING_CODEX</td>
+            <td>Codex audit</td>
+            <td><span class="flow-tag codex">codex</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST61</span><span class="transition-tag">ST70</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--purple)">ST61_AUDITING_CLAUDE</td>
+            <td>Claude audit</td>
+            <td><span class="flow-tag claude">claude</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST70</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--amber)">ST70_TRIAGING</td>
+            <td>Triage</td>
+            <td><span class="flow-tag codex">codex</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST80</span><span class="transition-tag">ST95</span><span class="transition-tag">ST110</span><span class="transition-tag terminal">ST120</span><span class="transition-tag">ST130</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--blue)">ST80_FIXING</td>
+            <td>Fix round</td>
+            <td><span class="flow-tag codex">codex</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST40</span><span class="transition-tag terminal">ST120</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--blue)">ST95_REMEDIATING</td>
+            <td>Remediation</td>
+            <td><span class="flow-tag codex">codex</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST40</span><span class="transition-tag terminal">ST120</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--amber)">ST110_AWAITING_HUMAN_GATE</td>
+            <td>Human gate</td>
+            <td><span class="flow-tag human">human</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST130</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--purple)">ST120_BLOCKED_EXTERNAL</td>
+            <td>Blocked</td>
+            <td><span class="flow-tag human">human</span></td>
+            <td><div class="transitions-list"><em style="color:var(--text-dim); font-size:0.72rem">absorbing within attempt — resume creates a fresh attempt</em></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--green)">ST130_PASSED</td>
+            <td>Passed</td>
+            <td><span class="flow-tag git">git</span></td>
+            <td><div class="transitions-list"><span class="transition-tag">ST10 (next item)</span><span class="transition-tag terminal">ST140</span></div></td>
+          </tr>
+          <tr>
+            <td class="state-code" style="color:var(--red)">ST140_ESCALATED</td>
+            <td>Escalated</td>
+            <td><span class="flow-tag human">human</span></td>
+            <td><div class="transitions-list"><em style="color:var(--text-dim); font-size:0.72rem">absorbing within attempt — resume creates a fresh attempt</em></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 4. COMPONENTS ═══════════════ -->
+  <section class="section" id="components">
+    <div class="section-label">Section 04</div>
+    <h2 class="section-title">Component Architecture</h2>
+    <p class="section-desc">
+      All modules live under <code>automation/plan_orchestrator/</code>. Each has a single responsibility.
+    </p>
+
+    <div class="comp-grid">
+
+      <div class="comp-card">
+        <div class="comp-name">runtime.py</div>
+        <div class="comp-file">PlanOrchestrator class · lifecycle engine</div>
+        <div class="comp-desc">Central orchestration engine. Manages the full item lifecycle: worktree prep → mutation → verify → audit → triage → terminal routing. Contains the main processing loop and all stage-specific logic.</div>
+        <span class="comp-role core">Core Engine</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">cli.py</div>
+        <div class="comp-file">build_parser() + main()</div>
+        <div class="comp-desc">CLI entry point with 6 subcommands: list-items, show-item, run, resume, refresh-run, and mark-manual-gate. Thin wrapper that delegates to PlanOrchestrator methods.</div>
+        <span class="comp-role io">IO / Interface</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">models.py</div>
+        <div class="comp-file">@dataclass models</div>
+        <div class="comp-desc">Typed dataclasses for all domain objects: PlanItem, NormalizedPlan, SupportSection, RunState, ItemRunState, RuntimeOptions, WorktreeMetadata, ItemContext, RunEvent, LatestPaths.</div>
+        <span class="comp-role core">Core Engine</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">state_machine.py</div>
+        <div class="comp-file">StateId enum + TRANSITIONS dict</div>
+        <div class="comp-desc">Defines the 17-state FSM with allowed transitions. Provides assert_transition(), first_unfinished_item(), and prerequisites_satisfied() queries.</div>
+        <span class="comp-role core">Core Engine</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">state_store.py</div>
+        <div class="comp-file">CRUD for RunState</div>
+        <div class="comp-desc">Creates, loads, saves, and updates run state JSON files. All writes are schema-validated and atomic (write to temp, then rename). Appends timestamped events to the event log.</div>
+        <span class="comp-role infra">Infrastructure</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">playbook_parser.py</div>
+        <div class="comp-file">Markdown → structured data</div>
+        <div class="comp-desc">Parses approved playbook Markdown into structured sections, subsections, and the ordered execution table. Extracts repo paths, code blocks, and numbered headings.</div>
+        <span class="comp-role io">IO / Interface</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">adapters/markdown_playbook.py</div>
+        <div class="comp-file">MarkdownPlaybookAdapter</div>
+        <div class="comp-desc">Public v1 adapter that transforms one approved <code>markdown_playbook_v1</code> file into NormalizedPlan items. Enforces the authored-vs-derived contract, maps manual gates and external checks, and projects support sections into item context.</div>
+        <span class="comp-role adapter">Adapter</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">worktree_manager.py</div>
+        <div class="comp-file">WorktreeManager class</div>
+        <div class="comp-desc">Git operations: creates run branches, prepares isolated worktrees per item+attempt, fast-forwards run branch on pass. Enforces clean checkout and git identity.</div>
+        <span class="comp-role infra">Infrastructure</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">subprocess_runner.py</div>
+        <div class="comp-file">run_codex_stage() + run_claude_audit()</div>
+        <div class="comp-desc">Subprocess wrappers for Codex and Claude CLI invocations. Handles output schema validation, JSON extraction from Claude responses, alternate report normalization, and "max effort" fallback retry.</div>
+        <span class="comp-role infra">Infrastructure</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">verification.py</div>
+        <div class="comp-file">run_verification()</div>
+        <div class="comp-desc">Deterministic verification gate: executes shell commands, checks artifact existence/content, validates scope of committed changes. Produces a structured pass/fail/partial report.</div>
+        <span class="comp-role safety">Safety / Guardrail</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">git_checkpoint.py</div>
+        <div class="comp-file">Scope enforcement + checkpoints</div>
+        <div class="comp-desc">Stages allowed changes (rejecting forbidden/out-of-scope paths), creates checkpoint commits, verifies post-checkpoint authority (no HEAD drift, no dirty files), and generates patches.</div>
+        <span class="comp-role safety">Safety / Guardrail</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">findings.py</div>
+        <div class="comp-file">Deterministic merge + dedup</div>
+        <div class="comp-desc">Merges findings from 4 sources (Codex audit, Claude audit, verification, mutation signals) using canonical_id deduplication. Generates synthetic findings from mutation report control signals.</div>
+        <span class="comp-role core">Core Engine</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">reporting.py</div>
+        <div class="comp-file">Artifact management</div>
+        <div class="comp-desc">Builds artifact manifests with SHA256-pinned packet copies, renders prompt templates, writes manual gate records, escalation manifests, and pass summaries.</div>
+        <span class="comp-role io">IO / Interface</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">validators.py</div>
+        <div class="comp-file">Utility functions</div>
+        <div class="comp-desc">JSON schema validation, atomic file writes, SHA256 computation, path scope checking, slug generation, timestamp formatting, and path resolution utilities.</div>
+        <span class="comp-role infra">Infrastructure</span>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-name">config.py</div>
+        <div class="comp-file">Defaults + environment overrides</div>
+        <div class="comp-desc">Configurable defaults for models (gpt-5.4, opus), timeouts (2h execute, 1h verify/audit, 30m triage, 1.5h fix/remediation), fix budgets (2 fix + 1 remediation round), paths, and environment variable overrides.</div>
+        <span class="comp-role infra">Infrastructure</span>
+      </div>
+
+    </div>
+
+    <div class="legend-row" style="margin-top:1.5rem">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--cyan)"></div>Core Engine</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--blue)"></div>Infrastructure</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>Safety / Guardrail</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--purple)"></div>Adapter</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--amber)"></div>IO / Interface</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 5. CLI REFERENCE ═══════════════ -->
+  <section class="section" id="cli">
+    <div class="section-label">Section 05</div>
+    <h2 class="section-title">CLI Reference</h2>
+    <p class="section-desc">
+      All commands are run via <code>python automation/run_plan_orchestrator.py &lt;command&gt;</code>.
+    </p>
+
+    <div class="cli-grid">
+
+      <div class="cli-card">
+        <div class="cli-cmd">list-items</div>
+        <div class="cli-desc">Display all normalized plan items with phase, change profile, R/G requirement, and gate status.</div>
+        <div class="cli-flags">--playbook &lt;path&gt; --format table|json</div>
+      </div>
+
+      <div class="cli-card">
+        <div class="cli-cmd">show-item</div>
+        <div class="cli-desc">Show full details for a single normalized plan item.</div>
+        <div class="cli-flags">--playbook &lt;path&gt; --item &lt;id&gt; --format text|json</div>
+      </div>
+
+      <div class="cli-card">
+        <div class="cli-cmd">run</div>
+        <div class="cli-desc">Start a new orchestration run. Specify a single item, a comma-separated list, or <code>--next</code> for the first eligible item.</div>
+        <div class="cli-flags">--playbook &lt;path&gt; --item &lt;id&gt; | --items &lt;id,id&gt; | --next  --auto-advance --max-items &lt;n&gt; --external-evidence-dir &lt;path&gt;</div>
+      </div>
+
+      <div class="cli-card">
+        <div class="cli-cmd">resume</div>
+        <div class="cli-desc">Resume an existing run from its last known state. Resets blocked_external or escalated items for a fresh attempt.</div>
+        <div class="cli-flags">--run-id &lt;id&gt; --external-evidence-dir &lt;path&gt; --auto-advance</div>
+      </div>
+
+      <div class="cli-card">
+        <div class="cli-cmd">refresh-run</div>
+        <div class="cli-desc">Retarget a saved run onto a descendant branch and rebuild its normalized plan from the saved playbook snapshot.</div>
+        <div class="cli-flags">--run-id &lt;id&gt; --retarget-run-branch-to &lt;ref&gt;</div>
+      </div>
+
+      <div class="cli-card">
+        <div class="cli-cmd">mark-manual-gate</div>
+        <div class="cli-desc">Record a human decision on a pending manual gate. Approved gates fast-forward the run branch; rejected gates escalate.</div>
+        <div class="cli-flags">--run-id &lt;id&gt; --item &lt;id&gt; --decision approved|rejected --by &lt;name&gt; --note &lt;text&gt; --evidence-path &lt;path&gt;</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════ 6. ARTIFACTS & SCHEMAS ═══════════════ -->
+  <section class="section" id="artifacts">
+    <div class="section-label">Section 06</div>
+    <h2 class="section-title">Artifacts &amp; Schemas</h2>
+    <p class="section-desc">
+      Every data exchange between stages is schema-validated JSON. Schemas live in <code>automation/plan_orchestrator/schemas/</code>
+      and prompts in <code>automation/plan_orchestrator/prompts/</code>.
+    </p>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+      <div>
+        <h3 style="font-family:var(--mono); font-size:0.75rem; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:0.75rem;">JSON Schemas</h3>
+        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">run_state.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Full run state with item states, event log, runtime options</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">normalized_plan.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Adapter output: items, support sections, global context</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">item_context.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Everything the mutation agent needs for one stage</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">artifact_manifest.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">SHA256-pinned registry of all stage input/output artifacts</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">execution_report.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Codex execution stage output</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">fix_report.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Codex fix / remediation stage output</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">verification_report.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Verification gate results (commands, artifacts, scope)</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">audit_report.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Shared schema for both Codex and Claude auditors</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">triage_report.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Triage decision with merged findings and reasoning</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">manual_gate.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Human gate record with review findings and decision</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--cyan)">escalation_manifest.schema.json</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Terminal escalation bundle with preserved refs and actions</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="font-family:var(--mono); font-size:0.75rem; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:0.75rem;">Prompt Templates</h3>
+        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--green)">execution_codex.md</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Initial implementation prompt (Codex, write sandbox)</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--green)">fix_codex.md</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Fix-round prompt with source finding IDs (Codex, write sandbox)</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--green)">remediation_codex.md</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Remediation prompt with round history (Codex, write sandbox)</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--purple)">audit_codex.md</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Codex auditor prompt (read-only sandbox)</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--purple)">audit_claude.md</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Claude auditor prompt (plan permission mode)</div>
+          </div>
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.75rem; color:var(--amber)">triage_codex.md</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-top:0.15rem">Triage decision prompt (Codex, read-only sandbox)</div>
+          </div>
+        </div>
+
+        <h3 style="font-family:var(--mono); font-size:0.75rem; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; margin:1.5rem 0 0.75rem;">Key Environment Variables</h3>
+        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+          <div class="cli-card" style="grid-template-columns:1fr; padding:0.7rem 1rem;">
+            <div style="font-family:var(--mono); font-size:0.72rem; color:var(--text-secondary)">
+              PLAN_ORCHESTRATOR_CODEX_MODEL<br>
+              PLAN_ORCHESTRATOR_PLAYBOOK_PATH<br>
+              PLAN_ORCHESTRATOR_CODEX_REASONING_EFFORT<br>
+              PLAN_ORCHESTRATOR_CLAUDE_MODEL<br>
+              PLAN_ORCHESTRATOR_CLAUDE_EFFORT<br>
+              PLAN_ORCHESTRATOR_EXECUTION_TIMEOUT_SEC<br>
+              PLAN_ORCHESTRATOR_VERIFICATION_TIMEOUT_SEC<br>
+              PLAN_ORCHESTRATOR_AUDIT_TIMEOUT_SEC<br>
+              PLAN_ORCHESTRATOR_TRIAGE_TIMEOUT_SEC<br>
+              PLAN_ORCHESTRATOR_FIX_TIMEOUT_SEC<br>
+              PLAN_ORCHESTRATOR_REMEDIATION_TIMEOUT_SEC<br>
+              PLAN_ORCHESTRATOR_MAX_FIX_ROUNDS<br>
+              PLAN_ORCHESTRATOR_MAX_REMEDIATION_ROUNDS<br>
+              PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+function toggleExpand(el) {
+  if (!el.querySelector('.stage-detail')) return;
+  el.classList.toggle('expanded');
+}
+
+// Smooth nav highlighting
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// Intersection observer for nav highlighting on scroll
+const sections = document.querySelectorAll('.section');
+const navBtns = document.querySelectorAll('.nav-btn');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      navBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { threshold: 0.15, rootMargin: '-80px 0px -40% 0px' });
+sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>
