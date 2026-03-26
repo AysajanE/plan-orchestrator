@@ -27,6 +27,14 @@ The full run commands below assume:
 - Git identity configured
 - no unreviewed ambient agent config unless intentionally acknowledged
 
+If you are running on a workstation where you have intentionally reviewed ambient agent config and want to acknowledge it for the full-run commands below, export the documented override first:
+
+```bash
+export PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1
+```
+
+Do not set that override for the no-credential inspection commands. Use it only when you have reviewed the environment and intentionally want the runtime to proceed.
+
 ## Tier 1: no-credential tour
 
 ```bash
@@ -167,13 +175,14 @@ Expected result:
 
 ## Proof assets to keep
 
-Recommended checked-in filenames for the visual proof surface:
+Recommended checked-in files for the visual proof surface in this repo:
 
-- `docs/assets/show-hn-demo/no-credential-tour.png`
-- `docs/assets/show-hn-demo/happy-path-run.gif`
-- `docs/assets/show-hn-demo/happy-path-artifact-tree.png`
+- `docs/assets/show-hn-demo/proof-captures.html`
+- `docs/assets/show-hn-demo/happy-path-run.png`
 - `docs/assets/show-hn-demo/manual-gate.png`
 - `docs/assets/show-hn-demo/blocked-external.png`
+
+Optional richer assets such as a no-credential screenshot, an artifact-tree capture, or a GIF are fine, but only add them if you also update `docs/launch-proof.md` to point at the exact checked-in filenames.
 
 Recommended JSON and text excerpts to quote or screenshot:
 
