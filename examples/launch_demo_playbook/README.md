@@ -34,6 +34,18 @@ python automation/run_plan_orchestrator.py show-item \
   --format text
 ```
 
+## Full-run prerequisite
+
+The full `run`, `mark-manual-gate`, and `resume` walkthrough below assumes a clean tracked checkout.
+
+If you are running it on a workstation with intentionally reviewed ambient Codex or Claude config, acknowledge the preflight check first:
+
+```bash
+export PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1
+```
+
+Do not set that override for the no-credential tour above. Use it only when you have reviewed the local environment and intentionally want the full runtime path to proceed.
+
 ## 1) Happy path: item `01`
 
 ```bash

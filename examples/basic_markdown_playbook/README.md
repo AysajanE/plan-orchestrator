@@ -45,7 +45,15 @@ python automation/run_plan_orchestrator.py show-item \
 
 ## Exact sequential walkthrough
 
-The commands below assume a bash-compatible shell.
+The commands below assume a bash-compatible shell and a clean tracked checkout.
+
+If you are running this full walkthrough on a workstation with intentionally reviewed ambient Codex or Claude config, acknowledge the preflight check first:
+
+```bash
+export PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1
+```
+
+Do not set that override for the read-only inspection commands above. Use it only when you have reviewed the local environment and intentionally want the full runtime path to proceed.
 
 ### 1) Start item `01`
 
