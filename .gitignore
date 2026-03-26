@@ -10,6 +10,7 @@ __pycache__/
 .mypy_cache/
 .coverage
 htmlcov/
+.env
 .venv/
 venv/
 
@@ -19,4 +20,3 @@ venv/
 # Editors
 .vscode/
 .idea/
-

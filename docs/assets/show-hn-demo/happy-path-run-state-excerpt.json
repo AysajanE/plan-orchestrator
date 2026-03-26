@@ -1,0 +1,52 @@
+{
+  "captured_from_commit": "e36a115",
+  "captured_at_local_date": "2026-03-26",
+  "run_id": "RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10",
+  "current_state": "ST130_PASSED",
+  "current_item_id": "01",
+  "item": {
+    "item_id": "01",
+    "attempt_number": 1,
+    "terminal_state": "passed",
+    "latest_paths": {
+      "execution_report_path": ".local/ai/plan_orchestrator/runs/RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10/items/01/attempt-1/execution_report.round-0.json",
+      "verification_report_path": ".local/automation/plan_orchestrator/runs/RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10/items/01/attempt-1/verification_report.execute.round-0.json",
+      "codex_audit_report_path": ".local/ai/plan_orchestrator/runs/RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10/items/01/attempt-1/codex_audit_report.execute.round-0.json",
+      "claude_audit_report_path": ".local/ai/plan_orchestrator/runs/RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10/items/01/attempt-1/claude_audit_report.execute.round-0.json",
+      "triage_report_path": ".local/ai/plan_orchestrator/runs/RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10/items/01/attempt-1/triage_report.execute.round-0.json",
+      "artifact_manifest_path": ".local/automation/plan_orchestrator/runs/RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10/items/01/attempt-1/artifact_manifest.triage.execute.round-0.json"
+    }
+  },
+  "event_log_tail": [
+    {
+      "state": "ST40_VERIFYING",
+      "actor": "verification",
+      "message": "Running verification gate."
+    },
+    {
+      "state": "ST50_AUDIT_PACKET_READY",
+      "actor": "orchestrator",
+      "message": "Preparing audit packet."
+    },
+    {
+      "state": "ST60_AUDITING_CODEX",
+      "actor": "codex",
+      "message": "Running Codex audit."
+    },
+    {
+      "state": "ST61_AUDITING_CLAUDE",
+      "actor": "claude",
+      "message": "Running Claude audit."
+    },
+    {
+      "state": "ST70_TRIAGING",
+      "actor": "codex",
+      "message": "Running triage stage."
+    },
+    {
+      "state": "ST130_PASSED",
+      "actor": "git",
+      "message": "Item passed and run branch fast-forwarded."
+    }
+  ]
+}

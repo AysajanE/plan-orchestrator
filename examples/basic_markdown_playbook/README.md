@@ -1,49 +1,74 @@
 # Basic Markdown Playbook Example
 
-This example ships two things:
+This is the deeper, dependency-ordered example for `plan-orchestrator`.
 
-1. a **thin example adapter wrapper** around the canonical `MarkdownPlaybookAdapter`
-2. a **small three-item playbook family** that demonstrates the public runtime contract without any source-project vocabulary
+If you want the shortest launch demo, start with `examples/launch_demo_playbook/`. This folder is for the fuller control-flow story: item `01` stops at a manual gate, item `02` is the behavioral Red/Green item, and item `03` demonstrates the blocked-external resume path.
 
-## What the example proves
+## What this example proves
 
-The example is intentionally small, but it shows the full public shape:
+- a manual-gate item can stop cleanly in `awaiting_human_gate`
+- a later behavioral item can run only after prerequisites are actually `passed`
+- a later item can stop in `blocked_external` and resume from the same run once local evidence is supplied
+- a final approval can still be recorded after an external-evidence resume
 
-- one manual-gate item
-- one behavioral item with explicit Red/Green verification wiring
-- one item that blocks until human-supplied external evidence is present
+The dependency order in `playbook.md` matters:
 
-The runtime still uses the same core package and the same canonical `markdown_playbook_v1` contract.
+- `02` depends on `01`
+- `03` depends on `02`
+
+That is why the walkthrough below intentionally keeps a single `RUN_ID` alive across `run`, `mark-manual-gate`, and `resume`.
 
 ## Files
 
 - `playbook.md` — the example `markdown_playbook_v1` file
 - `example_adapter.py` — thin wrapper showing where a future job-specific adapter would hook in
 - `workspace/` — tracked repo inputs and deliverable surfaces referenced by the playbook
-- `external_evidence/` — sample local evidence you can pass to a blocked item
+- `external_evidence/` — sample local evidence for the blocked-external resume step
 
-## List the example items
+## Read-only inspection
+
+List the example items:
 
 ```bash
 python automation/run_plan_orchestrator.py list-items \
   --playbook examples/basic_markdown_playbook/playbook.md
 ```
 
-## Run the manual-gate item
+Inspect the behavioral item and its verification wiring:
 
 ```bash
-python automation/run_plan_orchestrator.py run \
+python automation/run_plan_orchestrator.py show-item \
   --playbook examples/basic_markdown_playbook/playbook.md \
-  --item 01
+  --item 02 \
+  --format json
 ```
 
-That item is designed to stop in `awaiting_human_gate` after the technical path is clean.
+## Exact sequential walkthrough
 
-Record the manual decision with:
+The commands below assume a bash-compatible shell.
+
+### 1) Start item `01`
+
+```bash
+RUN_OUTPUT="$(python automation/run_plan_orchestrator.py run \
+  --playbook examples/basic_markdown_playbook/playbook.md \
+  --item 01)"
+printf '%s\n' "$RUN_OUTPUT"
+
+RUN_ID="$(printf '%s\n' "$RUN_OUTPUT" | python -c 'import sys, json; print(json.load(sys.stdin)["run_id"])')"
+echo "RUN_ID=$RUN_ID"
+```
+
+Expected result:
+
+- `last_terminal_state` is `awaiting_human_gate`
+- the run now waits for a human decision on item `01`
+
+### 2) Approve the manual gate for item `01`
 
 ```bash
 python automation/run_plan_orchestrator.py mark-manual-gate \
-  --run-id RUN_ID_FROM_THE_PREVIOUS_COMMAND \
+  --run-id "$RUN_ID" \
   --item 01 \
   --decision approved \
   --by "Example Reviewer" \
@@ -51,43 +76,64 @@ python automation/run_plan_orchestrator.py mark-manual-gate \
   --evidence-path examples/basic_markdown_playbook/workspace/docs/runbooks/release_note.md
 ```
 
-## Run the behavioral item
+Expected result:
 
-```bash
-python automation/run_plan_orchestrator.py run \
-  --playbook examples/basic_markdown_playbook/playbook.md \
-  --item 02
-```
+- item `01` becomes `passed`
+- the run branch fast-forwards to the reviewed checkpoint for item `01`
 
-The example command contract for that item is intentionally simple:
-
-```text
-python examples/basic_markdown_playbook/workspace/tests/test_service.py
-```
-
-It exists to show how a behavioral item declares a required verification command in the playbook.
-
-## Demonstrate blocked-external handling
-
-Run the publication item without evidence first:
-
-```bash
-python automation/run_plan_orchestrator.py run \
-  --playbook examples/basic_markdown_playbook/playbook.md \
-  --item 03
-```
-
-That item should stop in `blocked_external`.
-
-Then resume it with the bundled sample evidence directory:
+### 3) Resume the same run to execute item `02`
 
 ```bash
 python automation/run_plan_orchestrator.py resume \
-  --run-id RUN_ID_FROM_THE_PREVIOUS_COMMAND \
+  --run-id "$RUN_ID"
+```
+
+Expected result:
+
+- item `02` runs because its prerequisite is now truly `passed`
+- the returned JSON reports `last_terminal_state` as `passed`
+
+### 4) Resume the same run again to demonstrate `blocked_external` on item `03`
+
+```bash
+python automation/run_plan_orchestrator.py resume \
+  --run-id "$RUN_ID"
+```
+
+Expected result:
+
+- item `03` stops in `blocked_external`
+- the returned JSON reports `last_terminal_state` as `blocked_external`
+
+### 5) Resume item `03` with the bundled sample evidence
+
+```bash
+python automation/run_plan_orchestrator.py resume \
+  --run-id "$RUN_ID" \
   --external-evidence-dir examples/basic_markdown_playbook/external_evidence
 ```
 
-With evidence present, the runtime can continue the item attempt and then apply the normal downstream gates.
+Expected result:
+
+- item `03` reruns as a fresh attempt with the supplied evidence packet
+- the returned JSON should now report `last_terminal_state` as `awaiting_human_gate`
+
+### 6) Approve the final manual gate for item `03`
+
+```bash
+python automation/run_plan_orchestrator.py mark-manual-gate \
+  --run-id "$RUN_ID" \
+  --item 03 \
+  --decision approved \
+  --by "Example Reviewer" \
+  --note "Status-note approval completed." \
+  --evidence-path examples/basic_markdown_playbook/external_evidence/provider_status_snapshot.md
+```
+
+Expected result:
+
+- item `03` becomes `passed`
+- the run has now exercised manual gate, behavioral verification, external evidence, and resume semantics in one dependency-ordered flow
 
 ## Why this stays domain-neutral
 

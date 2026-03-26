@@ -1,0 +1,22 @@
+{
+  "captured_from_commit": "e36a115",
+  "captured_at_local_date": "2026-03-26",
+  "run_id": "RUN_20260326T213457Z_379b6d553d944934aacbd9ef2519033c",
+  "blocked_attempt": {
+    "attempt_number": 1,
+    "terminal_state": "blocked_external",
+    "summary": "Item requires human-supplied external evidence before prepare_context can continue.",
+    "required_human_actions": [
+      {
+        "action_id": "supply_external_evidence",
+        "description": "Provide a valid external evidence directory and resume the blocked item."
+      }
+    ],
+    "suggested_resume_command": "python automation/run_plan_orchestrator.py resume --run-id RUN_20260326T213457Z_379b6d553d944934aacbd9ef2519033c --external-evidence-dir /absolute/path/to/evidence"
+  },
+  "resume_result": {
+    "attempt_number": 2,
+    "current_state": "ST130_PASSED",
+    "summary": "Verification passed, both audit lanes passed, and the required human-supplied external evidence is present and was used to update the status note."
+  }
+}
