@@ -43,6 +43,7 @@ Need the deeper behavioral example immediately? Inspect item `02` in `examples/b
 See:
 
 - `docs/demo-run.md` — exact commands for the launch demo and proof bundle capture
+- `docs/launch-proof.md` — real excerpts and captures from the March 26, 2026 demo runs
 - `examples/launch_demo_playbook/README.md` — shortest repeatable walkthrough
 - `examples/basic_markdown_playbook/README.md` — deeper sequential example with a dependency-ordered behavioral item
 - `docs/comparison.md` — comparison against the obvious baselines

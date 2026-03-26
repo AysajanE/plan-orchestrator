@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plan Orchestrator Launch Proof</title>
+    <style>
+      :root {
+        --bg: #f4f0e8;
+        --paper: #fffdf8;
+        --ink: #1f2328;
+        --muted: #5f6368;
+        --line: #d6cfc1;
+        --green: #1d6b48;
+        --amber: #996515;
+        --red: #8c2f24;
+        --blue: #23567a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 40px;
+        background:
+          radial-gradient(circle at top left, #ece4d5 0, transparent 28%),
+          radial-gradient(circle at bottom right, #e4ebef 0, transparent 24%),
+          var(--bg);
+        color: var(--ink);
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+      }
+
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      header {
+        margin-bottom: 24px;
+      }
+
+      .eyebrow {
+        display: inline-block;
+        margin-bottom: 10px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(255, 253, 248, 0.8);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 40px;
+        line-height: 1.05;
+      }
+
+      header p {
+        margin: 0;
+        max-width: 900px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.45;
+      }
+
+      .grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 251, 243, 0.98));
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 24px;
+        box-shadow: 0 18px 40px rgba(48, 40, 29, 0.08);
+      }
+
+      .card header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .card h2 {
+        margin: 0 0 6px;
+        font-size: 30px;
+      }
+
+      .card .subtitle {
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.45;
+      }
+
+      .badge {
+        flex: 0 0 auto;
+        padding: 10px 14px;
+        border-radius: 14px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border: 1px solid currentColor;
+      }
+
+      .badge.pass {
+        color: var(--green);
+        background: rgba(29, 107, 72, 0.08);
+      }
+
+      .badge.waiting {
+        color: var(--amber);
+        background: rgba(153, 101, 21, 0.09);
+      }
+
+      .badge.blocked {
+        color: var(--red);
+        background: rgba(140, 47, 36, 0.08);
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .meta div {
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(35, 86, 122, 0.05);
+        border: 1px solid rgba(35, 86, 122, 0.12);
+      }
+
+      .label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .value {
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      pre {
+        margin: 0;
+        padding: 18px;
+        overflow: auto;
+        border-radius: 18px;
+        border: 1px solid #d8d2c8;
+        background: #151718;
+        color: #f4f3ef;
+        font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .note {
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="eyebrow">March 26, 2026 Proof Surface</span>
+        <h1>Real Launch-Demo Artifacts</h1>
+        <p>
+          These cards summarize the actual March 26 runs executed against commit
+          <code>e36a115</code>. They are derived from the checked-in excerpt files under
+          <code>docs/assets/show-hn-demo/</code>, not hand-written examples.
+        </p>
+      </header>
+
+      <div class="grid">
+        <section class="card" id="happy-path">
+          <header>
+            <div>
+              <h2>Happy Path</h2>
+              <div class="subtitle">Item <code>01</code> reached <code>passed</code> with verification, dual audit, and triage all recorded.</div>
+            </div>
+            <div class="badge pass">ST130_PASSED</div>
+          </header>
+          <div class="meta">
+            <div>
+              <span class="label">Run ID</span>
+              <span class="value">RUN_20260326T212138Z_d63ee2ed409e47888b764e21d5d3aa10</span>
+            </div>
+            <div>
+              <span class="label">Current Item</span>
+              <span class="value">01</span>
+            </div>
+            <div>
+              <span class="label">Terminal State</span>
+              <span class="value">passed</span>
+            </div>
+          </div>
+          <pre>{
+  "current_state": "ST130_PASSED",
+  "latest_paths": {
+    "verification_report_path": ".../verification_report.execute.round-0.json",
+    "codex_audit_report_path": ".../codex_audit_report.execute.round-0.json",
+    "claude_audit_report_path": ".../claude_audit_report.execute.round-0.json",
+    "triage_report_path": ".../triage_report.execute.round-0.json",
+    "artifact_manifest_path": ".../artifact_manifest.triage.execute.round-0.json"
+  },
+  "event_log_tail": [
+    "ST40_VERIFYING",
+    "ST50_AUDIT_PACKET_READY",
+    "ST60_AUDITING_CODEX",
+    "ST61_AUDITING_CLAUDE",
+    "ST70_TRIAGING",
+    "ST130_PASSED"
+  ]
+}</pre>
+          <div class="note">Source: <code>happy-path-run-state-excerpt.json</code></div>
+        </section>
+
+        <section class="card" id="manual-gate">
+          <header>
+            <div>
+              <h2>Manual Gate</h2>
+              <div class="subtitle">Item <code>02</code> was technically clean but routed to <code>awaiting_human_gate</code> until reviewer signoff was recorded.</div>
+            </div>
+            <div class="badge waiting">Awaiting Human Gate</div>
+          </header>
+          <div class="meta">
+            <div>
+              <span class="label">Run ID</span>
+              <span class="value">RUN_20260326T212641Z_14d148a205364e2a8daca8d2fb721bc8</span>
+            </div>
+            <div>
+              <span class="label">Gate Type</span>
+              <span class="value">signoff</span>
+            </div>
+            <div>
+              <span class="label">Decision</span>
+              <span class="value">approved by Show HN Demo Reviewer</span>
+            </div>
+          </div>
+          <pre>{
+  "pre_approval": {
+    "overall_decision": "awaiting_human_gate",
+    "next_stage": "awaiting_human_gate",
+    "summary": "verification and audits passed; human signoff still required"
+  },
+  "manual_gate": {
+    "status": "approved",
+    "requested_reason": "Human review must approve the review note.",
+    "decision": {
+      "outcome": "approved",
+      "note": "Launch-demo signoff completed."
+    }
+  }
+}</pre>
+          <div class="note">Source: <code>manual-gate-excerpt.json</code></div>
+        </section>
+
+        <section class="card" id="blocked-external">
+          <header>
+            <div>
+              <h2>Blocked External, Then Resume</h2>
+              <div class="subtitle">Item <code>03</code> first stopped in <code>blocked_external</code>, then resumed on <code>attempt-2</code> after local evidence was supplied.</div>
+            </div>
+            <div class="badge blocked">Blocked Then Resolved</div>
+          </header>
+          <div class="meta">
+            <div>
+              <span class="label">Run ID</span>
+              <span class="value">RUN_20260326T213457Z_379b6d553d944934aacbd9ef2519033c</span>
+            </div>
+            <div>
+              <span class="label">Blocked Attempt</span>
+              <span class="value">attempt-1</span>
+            </div>
+            <div>
+              <span class="label">Resume Result</span>
+              <span class="value">attempt-2 passed</span>
+            </div>
+          </div>
+          <pre>{
+  "blocked_attempt": {
+    "terminal_state": "blocked_external",
+    "required_human_action": "Provide a valid external evidence directory and resume the blocked item."
+  },
+  "resume_result": {
+    "attempt_number": 2,
+    "current_state": "ST130_PASSED",
+    "summary": "supplied evidence was used to update the status note"
+  }
+}</pre>
+          <div class="note">Source: <code>blocked-external-excerpt.json</code></div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

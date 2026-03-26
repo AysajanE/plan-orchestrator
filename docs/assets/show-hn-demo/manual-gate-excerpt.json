@@ -1,0 +1,30 @@
+{
+  "captured_from_commit": "e36a115",
+  "captured_at_local_date": "2026-03-26",
+  "run_id": "RUN_20260326T212641Z_14d148a205364e2a8daca8d2fb721bc8",
+  "pre_approval": {
+    "summary": "Verification and audits pass; item 02 is technically acceptable but still awaiting the required human signoff and signed review note evidence.",
+    "overall_decision": "awaiting_human_gate",
+    "next_stage": "awaiting_human_gate"
+  },
+  "manual_gate": {
+    "gate_type": "signoff",
+    "status": "approved",
+    "requested_reason": "Human review must approve the review note.",
+    "required_evidence": [
+      "signed review note"
+    ],
+    "decision": {
+      "outcome": "approved",
+      "decided_by": "Show HN Demo Reviewer",
+      "note": "Launch-demo signoff completed.",
+      "evidence_paths": [
+        "examples/launch_demo_playbook/workspace/docs/runbooks/review_note.md"
+      ]
+    },
+    "related_refs": {
+      "artifact_manifest_path": ".local/automation/plan_orchestrator/runs/RUN_20260326T212641Z_14d148a205364e2a8daca8d2fb721bc8/items/02/attempt-1/artifact_manifest.triage.execute.round-0.json",
+      "triage_report_path": ".local/ai/plan_orchestrator/runs/RUN_20260326T212641Z_14d148a205364e2a8daca8d2fb721bc8/items/02/attempt-1/triage_report.execute.round-0.json"
+    }
+  }
+}
