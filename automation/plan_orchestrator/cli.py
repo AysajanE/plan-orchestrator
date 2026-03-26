@@ -41,6 +41,85 @@ def _print_table(rows: list[dict]) -> None:
         print("  ".join(str(row[key]).ljust(widths[key]) for key, _ in headers))
 
 
+def _print_bullets(title: str, values: list[str]) -> None:
+    print(f"{title}:")
+    if not values:
+        print("  - none")
+        return
+    for value in values:
+        print(f"  - {value}")
+
+
+def _print_item_text(item: dict) -> None:
+    manual_gate = dict(item.get("manual_gate", {}) or {})
+    external_check = dict(item.get("external_check", {}) or {})
+    verification_hints = dict(item.get("verification_hints", {}) or {})
+
+    prerequisites = list(item.get("prerequisite_item_ids", []))
+
+    print(f"ITEM {item['item_id']}")
+    print(f"Phase: {item['phase']} ({item['phase_slug']})")
+    print(f"Action: {item['action']}")
+    print(f"Why now: {item['why_now']}")
+    print(f"Owner type: {item['owner_type']}")
+    print(f"Change profile: {item['change_profile']}")
+    print(f"Execution mode: {item.get('execution_mode', 'codex')}")
+    print(f"Requires red/green: {'yes' if item.get('requires_red_green') else 'no'}")
+    print(f"Prerequisites: {', '.join(prerequisites) if prerequisites else 'none'}")
+
+    manual_gate_summary = "not required"
+    if manual_gate.get("required"):
+        manual_gate_summary = str(manual_gate.get("gate_type", "custom"))
+        gate_reason = str(manual_gate.get("gate_reason", "") or "").strip()
+        if gate_reason:
+            manual_gate_summary += f" ({gate_reason})"
+    print(f"Manual gate: {manual_gate_summary}")
+
+    external_summary = "not required"
+    if external_check.get("required"):
+        external_summary = str(external_check.get("mode", "required"))
+        dependencies = [
+            str(value).strip()
+            for value in external_check.get("dependencies", [])
+            if str(value).strip()
+        ]
+        if dependencies:
+            external_summary += f" ({', '.join(dependencies)})"
+    print(f"External check: {external_summary}")
+    print("")
+
+    _print_bullets("Allowed write roots", list(item.get("allowed_write_roots", [])))
+    _print_bullets("Repo surfaces", list(item.get("repo_surface_paths", [])))
+    _print_bullets("Consult paths", list(item.get("consult_paths", [])))
+    _print_bullets("Deliverable paths", list(item.get("deliverable_paths", [])))
+    _print_bullets("Support sections", list(item.get("support_section_ids", [])))
+
+    if manual_gate.get("required"):
+        _print_bullets(
+            "Manual gate evidence",
+            list(manual_gate.get("required_evidence", [])),
+        )
+    if external_check.get("required"):
+        _print_bullets(
+            "External dependencies",
+            list(external_check.get("dependencies", [])),
+        )
+
+    _print_bullets(
+        "Required verification commands",
+        list(verification_hints.get("required_commands", [])),
+    )
+    _print_bullets(
+        "Suggested verification commands",
+        list(verification_hints.get("suggested_commands", [])),
+    )
+    _print_bullets(
+        "Required verification artifacts",
+        list(verification_hints.get("required_artifacts", [])),
+    )
+    _print_bullets("Notes", list(item.get("notes", [])))
+
+
 def _add_playbook_argument(parser: argparse.ArgumentParser) -> None:
     env_default = default_playbook_path()
     help_text = "Path to the markdown_playbook_v1 file."
@@ -118,7 +197,10 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "show-item":
             item = orchestrator.show_item(args.playbook, args.item)
-            print(json.dumps(item, indent=2))
+            if args.format == "json":
+                print(json.dumps(item, indent=2))
+            else:
+                _print_item_text(item)
             return 0
 
         if args.command == "run":
