@@ -16,6 +16,8 @@ Run the local checks:
 
 ```bash
 python3 -m unittest discover -s automation/plan_orchestrator/tests -t .
+python3 automation/run_plan_orchestrator.py list-items --playbook examples/launch_demo_playbook/playbook.md
+python3 automation/run_plan_orchestrator.py show-item --playbook examples/launch_demo_playbook/playbook.md --item 01 --format text
 python3 automation/run_plan_orchestrator.py list-items --playbook examples/basic_markdown_playbook/playbook.md
 python3 automation/run_plan_orchestrator.py show-item --playbook examples/basic_markdown_playbook/playbook.md --item 02 --format json
 ```
@@ -28,4 +30,3 @@ If your change affects the playbook contract, adapter normalization, or runtime 
 - Call out any contract changes explicitly.
 - Include the commands you ran for verification.
 - Keep unrelated refactors out of the same pull request.
-

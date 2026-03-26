@@ -1,6 +1,7 @@
 # Launch Proof
 
 This note captures the real proof surface generated on March 26, 2026 against commit `e36a115`.
+That local implementation commit was later published on GitHub `main` via squash merge as `3131e49`.
 
 The runs below were executed from the launch demo in `examples/launch_demo_playbook/` after the approved Show HN package landed. Because this is a maintainer workstation with reviewed ambient agent config present, the full-run commands used the documented local acknowledgment path `PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1`.
 
@@ -17,6 +18,12 @@ The runs below were executed from the launch demo in `examples/launch_demo_playb
 - item `03` blocked external then resume: `RUN_20260326T213457Z_379b6d553d944934aacbd9ef2519033c`
 
 ## Visible Captures
+
+Combined checked-in proof page:
+
+- `assets/show-hn-demo/proof-captures.html`
+
+Individual captures:
 
 Happy path:
 
