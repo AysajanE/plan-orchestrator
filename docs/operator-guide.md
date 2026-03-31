@@ -56,6 +56,14 @@ export PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1
 
 Use that override only when you have intentionally reviewed the environment.
 
+To surface those checks without starting a run, use:
+
+```bash
+python automation/run_plan_orchestrator.py doctor \
+  --playbook path/to/playbook.md \
+  --format text
+```
+
 ## Commands
 
 List items:
@@ -71,6 +79,30 @@ Show one item:
 python automation/run_plan_orchestrator.py show-item \
   --playbook path/to/playbook.md \
   --item 01
+```
+
+Run preflight and validation checks without mutating repo state:
+
+```bash
+python automation/run_plan_orchestrator.py doctor \
+  --playbook path/to/playbook.md \
+  --format json
+```
+
+Inspect one saved run:
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --format json
+```
+
+List all saved runs:
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --all \
+  --format text
 ```
 
 Run the first unfinished item:
@@ -216,6 +248,18 @@ If an item ends in a non-pass terminal state, inspect first:
 
 ```text
 .local/automation/plan_orchestrator/runs/<RUN_ID>/items/<ITEM_ID>/attempt-<N>/escalation_manifest.json
+```
+
+Then query the run surface:
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --run-id <RUN_ID> \
+  --format json
+
+python automation/run_plan_orchestrator.py doctor \
+  --run-id <RUN_ID> \
+  --format json
 ```
 
 Then inspect:

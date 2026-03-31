@@ -61,29 +61,12 @@ Expected result for the deeper behavioral inspection:
 - `requires_red_green` is `true`
 - `verification_hints.required_commands` includes `python examples/basic_markdown_playbook/workspace/tests/test_service.py`
 
-## Helper: print the latest artifact paths for one item
+Optional preflight proof before running the full flow:
 
 ```bash
-show_item_paths () {
-  python - <<'PY' "$1" "$2"
-import json
-import pathlib
-import sys
-
-run_id, item_id = sys.argv[1], sys.argv[2]
-run_state_path = pathlib.Path(".local/automation/plan_orchestrator/runs") / run_id / "run_state.json"
-data = json.loads(run_state_path.read_text(encoding="utf-8"))
-item = next(entry for entry in data["items"] if entry["item_id"] == item_id)
-
-print(f"run_state_path={run_state_path.as_posix()}")
-print(f"current_state={data['current_state']}")
-print(f"current_item_id={data['current_item_id']}")
-print(f"terminal_state={item['terminal_state']}")
-for key, value in item["latest_paths"].items():
-    if value:
-        print(f"{key}={value}")
-PY
-}
+python automation/run_plan_orchestrator.py doctor \
+  --playbook examples/launch_demo_playbook/playbook.md \
+  --format json
 ```
 
 ## Tier 2: happy path on item `01`
@@ -100,7 +83,9 @@ printf '%s\n' "$RUN_OUTPUT"
 RUN_ID="$(printf '%s\n' "$RUN_OUTPUT" | python -c 'import sys, json; print(json.load(sys.stdin)["run_id"])')"
 echo "RUN_ID=$RUN_ID"
 
-show_item_paths "$RUN_ID" 01
+python automation/run_plan_orchestrator.py status \
+  --run-id "$RUN_ID" \
+  --format json
 ```
 
 Expected result:
@@ -127,7 +112,9 @@ printf '%s\n' "$GATE_OUTPUT"
 GATE_RUN_ID="$(printf '%s\n' "$GATE_OUTPUT" | python -c 'import sys, json; print(json.load(sys.stdin)["run_id"])')"
 echo "GATE_RUN_ID=$GATE_RUN_ID"
 
-show_item_paths "$GATE_RUN_ID" 02
+python automation/run_plan_orchestrator.py status \
+  --run-id "$GATE_RUN_ID" \
+  --format json
 
 python automation/run_plan_orchestrator.py mark-manual-gate \
   --run-id "$GATE_RUN_ID" \
@@ -137,7 +124,9 @@ python automation/run_plan_orchestrator.py mark-manual-gate \
   --note "Launch-demo signoff completed." \
   --evidence-path examples/launch_demo_playbook/workspace/docs/runbooks/review_note.md
 
-show_item_paths "$GATE_RUN_ID" 02
+python automation/run_plan_orchestrator.py status \
+  --run-id "$GATE_RUN_ID" \
+  --format json
 ```
 
 Expected result:
@@ -157,13 +146,17 @@ printf '%s\n' "$BLOCKED_OUTPUT"
 BLOCKED_RUN_ID="$(printf '%s\n' "$BLOCKED_OUTPUT" | python -c 'import sys, json; print(json.load(sys.stdin)["run_id"])')"
 echo "BLOCKED_RUN_ID=$BLOCKED_RUN_ID"
 
-show_item_paths "$BLOCKED_RUN_ID" 03
+python automation/run_plan_orchestrator.py status \
+  --run-id "$BLOCKED_RUN_ID" \
+  --format json
 
 python automation/run_plan_orchestrator.py resume \
   --run-id "$BLOCKED_RUN_ID" \
   --external-evidence-dir examples/launch_demo_playbook/external_evidence
 
-show_item_paths "$BLOCKED_RUN_ID" 03
+python automation/run_plan_orchestrator.py status \
+  --run-id "$BLOCKED_RUN_ID" \
+  --format json
 ```
 
 Expected result:

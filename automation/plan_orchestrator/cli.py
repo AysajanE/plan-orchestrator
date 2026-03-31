@@ -5,7 +5,9 @@ import json
 import sys
 
 from .config import DEFAULT_PLAYBOOK_PATH_ENV, default_playbook_path, resolve_repo_root
+from .doctor import run_doctor
 from .runtime import OrchestratorError, PlanOrchestrator
+from .status import list_run_statuses, load_run_status
 
 
 def _print_table(rows: list[dict]) -> None:
@@ -120,6 +122,97 @@ def _print_item_text(item: dict) -> None:
     _print_bullets("Notes", list(item.get("notes", [])))
 
 
+def _bool_label(value: bool | None) -> str:
+    if value is None:
+        return "n/a"
+    return "yes" if value else "no"
+
+
+def _print_status_table(rows: list[dict]) -> None:
+    headers = [
+        ("run_id", "RUN"),
+        ("status_level", "STATUS"),
+        ("current_state", "STATE"),
+        ("current_item_id", "ITEM"),
+        ("updated_at_utc", "UPDATED"),
+    ]
+    rendered_rows = [
+        {
+            "run_id": str(row.get("run_id", "")),
+            "status_level": str(row.get("status_level", "")),
+            "current_state": str(row.get("current_state") or ""),
+            "current_item_id": str(row.get("current_item_id") or ""),
+            "updated_at_utc": str(row.get("updated_at_utc") or ""),
+        }
+        for row in rows
+    ]
+
+    widths = {}
+    for key, label in headers:
+        widths[key] = max(len(label), *(len(row[key]) for row in rendered_rows)) if rendered_rows else len(label)
+
+    print("  ".join(label.ljust(widths[key]) for key, label in headers))
+    print("  ".join("-" * widths[key] for key, _ in headers))
+    for row in rendered_rows:
+        print("  ".join(row[key].ljust(widths[key]) for key, _ in headers))
+
+
+def _print_status_text(summary: dict) -> None:
+    print(f"RUN {summary['run_id']}")
+    print(f"Status: {summary.get('status_level', 'unknown')} (exit {summary.get('exit_code', 0)})")
+    print(f"Current state: {summary.get('current_state') or 'unknown'}")
+    print(f"Current item: {summary.get('current_item_id') or 'none'}")
+    if summary.get("run_branch_name"):
+        print(f"Run branch: {summary['run_branch_name']}")
+    if summary.get("playbook_source_path"):
+        print(f"Playbook: {summary['playbook_source_path']}")
+    if summary.get("normalized_plan_path"):
+        print(f"Normalized plan: {summary['normalized_plan_path']}")
+
+    pending_action = summary.get("pending_action")
+    if pending_action:
+        print(
+            "Pending action: "
+            + str(pending_action.get("kind", "unknown"))
+            + " ("
+            + str(pending_action.get("detail", ""))
+            + ")"
+        )
+
+    current_item = summary.get("current_item")
+    if current_item:
+        print("")
+        print(f"Item {current_item['item_id']}:")
+        print(f"  state={current_item['state']}")
+        print(f"  attempt={current_item['attempt_number']}")
+        print(f"  terminal={current_item['terminal_state']}")
+        for key, value in current_item.get("latest_paths", {}).items():
+            if value:
+                print(f"  {key}={value}")
+
+    checks = summary.get("checks", {})
+    if checks:
+        print("")
+        print("Checks:")
+        for key, value in checks.items():
+            print(f"  {key}={_bool_label(value)}")
+
+
+def _print_doctor_text(report: dict) -> None:
+    print(f"DOCTOR {report.get('repo_root', '.')}")
+    print(f"Result: {'ok' if report.get('ok') else 'error'}")
+    for check in report.get("checks", []):
+        line = f"- {check['name']}: {check['status']}"
+        if "detail" in check:
+            line += f" ({check['detail']})"
+        elif "checks" in check:
+            rendered = ", ".join(
+                f"{name}={_bool_label(value)}" for name, value in check["checks"].items()
+            )
+            line += f" ({rendered})"
+        print(line)
+
+
 def _add_playbook_argument(parser: argparse.ArgumentParser) -> None:
     env_default = default_playbook_path()
     help_text = "Path to the markdown_playbook_v1 file."
@@ -178,16 +271,31 @@ def build_parser() -> argparse.ArgumentParser:
     gate_cmd.add_argument("--note", required=True)
     gate_cmd.add_argument("--evidence-path", action="append", default=[])
 
+    status_cmd = subparsers.add_parser("status", help="Show run status and health.")
+    status_group = status_cmd.add_mutually_exclusive_group(required=True)
+    status_group.add_argument("--run-id")
+    status_group.add_argument("--all", action="store_true")
+    status_cmd.add_argument("--format", choices=("text", "json"), default="text")
+    status_cmd.add_argument("--exit-code", action="store_true")
+
+    doctor_cmd = subparsers.add_parser(
+        "doctor",
+        help="Run preflight and validation checks without mutating repo state.",
+    )
+    doctor_cmd.add_argument("--playbook")
+    doctor_cmd.add_argument("--run-id")
+    doctor_cmd.add_argument("--format", choices=("text", "json"), default="text")
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     repo_root = resolve_repo_root()
-    orchestrator = PlanOrchestrator(repo_root)
 
     try:
         if args.command == "list-items":
+            orchestrator = PlanOrchestrator(repo_root)
             rows = orchestrator.list_items(args.playbook)
             if args.format == "json":
                 print(json.dumps(rows, indent=2))
@@ -196,6 +304,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "show-item":
+            orchestrator = PlanOrchestrator(repo_root)
             item = orchestrator.show_item(args.playbook, args.item)
             if args.format == "json":
                 print(json.dumps(item, indent=2))
@@ -204,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "run":
+            orchestrator = PlanOrchestrator(repo_root)
             if args.items and args.external_evidence_dir:
                 raise OrchestratorError(
                     "--external-evidence-dir is allowed only with --item or resume, not with --items."
@@ -222,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "resume":
+            orchestrator = PlanOrchestrator(repo_root)
             result = orchestrator.resume(
                 run_id=args.run_id,
                 external_evidence_dir=args.external_evidence_dir,
@@ -231,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "refresh-run":
+            orchestrator = PlanOrchestrator(repo_root)
             result = orchestrator.refresh_run(
                 run_id=args.run_id,
                 retarget_run_branch_to=args.retarget_run_branch_to,
@@ -239,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "mark-manual-gate":
+            orchestrator = PlanOrchestrator(repo_root)
             result = orchestrator.mark_manual_gate(
                 run_id=args.run_id,
                 item_id=args.item,
@@ -249,6 +362,38 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(json.dumps(result, indent=2))
             return 0
+
+        if args.command == "status":
+            if args.all:
+                result = list_run_statuses(repo_root)
+                if args.format == "json":
+                    print(json.dumps(result, indent=2))
+                else:
+                    _print_status_table(result)
+                return (
+                    max((int(entry.get("exit_code", 0)) for entry in result), default=0)
+                    if args.exit_code
+                    else 0
+                )
+
+            result = load_run_status(repo_root, args.run_id)
+            if args.format == "json":
+                print(json.dumps(result, indent=2))
+            else:
+                _print_status_text(result)
+            return int(result.get("exit_code", 0)) if args.exit_code else 0
+
+        if args.command == "doctor":
+            result = run_doctor(
+                repo_root,
+                playbook_path=args.playbook,
+                run_id=args.run_id,
+            )
+            if args.format == "json":
+                print(json.dumps(result, indent=2))
+            else:
+                _print_doctor_text(result)
+            return int(result.get("exit_code", 0 if result.get("ok", True) else 1))
 
         raise OrchestratorError(f"Unknown command: {args.command}")
     except (OrchestratorError, RuntimeError, FileNotFoundError) as exc:

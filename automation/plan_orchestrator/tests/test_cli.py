@@ -120,3 +120,135 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["item_id"], "01")
         self.assertEqual(payload["manual_gate"]["gate_type"], "signoff")
+
+    def test_status_json_format_emits_single_run_payload(self) -> None:
+        payload = {
+            "run_id": "RUN_STATUS",
+            "status_level": "ok",
+            "exit_code": 0,
+            "current_state": "ST130_PASSED",
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.load_run_status",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "status",
+                        "--run-id",
+                        "RUN_STATUS",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_status_all_json_format_emits_all_runs_payload(self) -> None:
+        payload = [
+            {"run_id": "RUN_A", "status_level": "ok", "exit_code": 0},
+            {"run_id": "RUN_B", "status_level": "waiting", "exit_code": 1},
+        ]
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.list_run_statuses",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "status",
+                        "--all",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_status_exit_code_can_follow_summary_health(self) -> None:
+        payload = {
+            "run_id": "RUN_WAITING",
+            "status_level": "waiting",
+            "exit_code": 1,
+            "current_state": "ST110_AWAITING_HUMAN_GATE",
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.load_run_status",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "status",
+                        "--run-id",
+                        "RUN_WAITING",
+                        "--format",
+                        "json",
+                        "--exit-code",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_doctor_json_format_emits_diagnostics_payload(self) -> None:
+        payload = {
+            "ok": True,
+            "repo_root": ".",
+            "checks": [
+                {"name": "agent_environment", "status": "ok"},
+                {"name": "playbook_parse", "status": "ok"},
+            ],
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.run_doctor",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "doctor",
+                        "--playbook",
+                        "playbook.md",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
