@@ -317,23 +317,47 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_cmd = subparsers.add_parser("status", help="Show run status and health.")
     status_group = status_cmd.add_mutually_exclusive_group(required=True)
-    status_group.add_argument("--run-id")
-    status_group.add_argument("--all", action="store_true")
-    status_cmd.add_argument("--format", choices=("text", "json"), default="text")
-    status_cmd.add_argument("--exit-code", action="store_true")
+    status_group.add_argument("--run-id", help="Show one saved run by id.")
+    status_group.add_argument(
+        "--all",
+        action="store_true",
+        help="Show every saved run under .local/automation/plan_orchestrator/runs.",
+    )
+    status_cmd.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Render human-readable text or machine-readable JSON.",
+    )
+    status_cmd.add_argument(
+        "--exit-code",
+        action="store_true",
+        help="Exit with the reported run health code instead of always returning zero.",
+    )
 
     doctor_cmd = subparsers.add_parser(
         "doctor",
         help="Diagnose runner state; --fix-safe may rebuild deterministic local artifacts only.",
     )
-    doctor_cmd.add_argument("--playbook")
-    doctor_cmd.add_argument("--run-id")
+    doctor_cmd.add_argument(
+        "--playbook",
+        help="Optional playbook to parse and normalize without starting a run.",
+    )
+    doctor_cmd.add_argument(
+        "--run-id",
+        help="Optional saved run id to validate and inspect.",
+    )
     doctor_cmd.add_argument(
         "--fix-safe",
         action="store_true",
         help="Rebuild deterministic local orchestrator artifacts only; never touches tracked repo files.",
     )
-    doctor_cmd.add_argument("--format", choices=("text", "json"), default="text")
+    doctor_cmd.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Render human-readable text or machine-readable JSON.",
+    )
 
     return parser
 

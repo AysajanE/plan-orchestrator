@@ -48,6 +48,36 @@ def make_item() -> dict:
 
 
 class CliTests(unittest.TestCase):
+    def test_status_help_describes_new_options(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["status", "--help"])
+
+        rendered = " ".join(stdout.getvalue().split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertIn("Show one saved run by id.", rendered)
+        self.assertIn("Show every saved run under .local/automation/plan_orchestrator/runs.", rendered)
+        self.assertIn("Exit with the reported run health code instead of always returning zero.", rendered)
+
+    def test_doctor_help_describes_scope_and_fix_safe_boundary(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["doctor", "--help"])
+
+        rendered = " ".join(stdout.getvalue().split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertIn("Optional playbook to parse and normalize without starting a run.", rendered)
+        self.assertIn("Optional saved run id to validate and inspect.", rendered)
+        self.assertIn("Rebuild deterministic local orchestrator artifacts only; never touches tracked repo files.", rendered)
+
     def test_show_item_text_format_renders_human_readable_output(self) -> None:
         fake_orchestrator = mock.Mock()
         fake_orchestrator.show_item.return_value = make_item()
