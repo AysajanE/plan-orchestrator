@@ -290,10 +290,22 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--item", help="Run one exact step_id.")
     group.add_argument("--items", help="Run a comma-separated list of exact step_id values.")
     group.add_argument("--next", action="store_true", help="Run the first unfinished item.")
-    run_cmd.add_argument("--config", help="Optional JSON runtime-policy overlay.")
+    run_cmd.add_argument(
+        "--config",
+        help="Optional JSON runtime-policy overlay for this run.",
+    )
     run_cmd.add_argument("--external-evidence-dir")
-    run_cmd.add_argument("--auto-advance", action="store_true", default=None)
-    run_cmd.add_argument("--max-items", type=int)
+    run_cmd.add_argument(
+        "--auto-advance",
+        action="store_true",
+        default=None,
+        help="Force auto-advance on for this run, even if the runtime policy default is off.",
+    )
+    run_cmd.add_argument(
+        "--max-items",
+        type=int,
+        help="Cap the number of items processed for this invocation.",
+    )
 
     resume_cmd = subparsers.add_parser("resume", help="Resume an existing run.")
     resume_cmd.add_argument("--run-id", required=True)

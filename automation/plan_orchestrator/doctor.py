@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from .adapters import build_default_adapter
 from .config import WORKTREES_ROOT, assert_clean_agent_environment, resolve_run_directories
 from .models import RunState
+from .playbook_snapshot import normalized_plan_from_playbook_snapshot
 from .playbook_parser import parse_playbook
 from .runtime_policy import RUNTIME_POLICY_CHECK_KEYS, runtime_policy_integrity
 from .state_store import load_run_state
@@ -274,22 +274,10 @@ def _normalized_plan_from_playbook_snapshot(
     snapshot_path: Path,
     preserved_playbook_path: Path,
 ):
-    snapshot_text = snapshot_path.read_text(encoding="utf-8")
-    try:
-        playbook_source = snapshot_text.split("\n---\n\n", 1)[1]
-    except IndexError as exc:
-        raise RuntimeError(
-            f"Playbook snapshot is malformed and cannot be repaired: {snapshot_path}"
-        ) from exc
-
-    with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8", delete=False) as handle:
-        handle.write(playbook_source)
-        temp_path = Path(handle.name)
-
-    try:
-        parsed = parse_playbook(temp_path)
-    finally:
-        temp_path.unlink(missing_ok=True)
-
-    adapter = build_default_adapter(repo_root)
-    return adapter.normalize(parsed, preserved_playbook_path)
+    return normalized_plan_from_playbook_snapshot(
+        snapshot_path=snapshot_path,
+        preserved_playbook_path=preserved_playbook_path,
+        normalize_parsed_playbook=build_default_adapter(repo_root).normalize,
+        missing_error=f"Missing playbook snapshot for repair: {snapshot_path}",
+        malformed_error=f"Playbook snapshot is malformed and cannot be repaired: {snapshot_path}",
+    )

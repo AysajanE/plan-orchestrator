@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +26,7 @@ from .git_checkpoint import (
     stage_allowed_changes,
 )
 from .models import ItemContext, NormalizedPlan, PlanItem, RunState
+from .playbook_snapshot import normalized_plan_from_playbook_snapshot
 from .playbook_parser import parse_playbook
 from .reporting import (
     artifact_spec,
@@ -653,27 +653,16 @@ class PlanOrchestrator:
         snapshot_path: Path,
         preserved_playbook_path: Path,
     ) -> NormalizedPlan:
-        if not snapshot_path.exists():
-            raise OrchestratorError(f"Missing playbook snapshot for refresh: {snapshot_path}")
-
-        snapshot_text = snapshot_path.read_text(encoding="utf-8")
         try:
-            playbook_source = snapshot_text.split("\n---\n\n", 1)[1]
-        except IndexError as exc:
-            raise OrchestratorError(
-                f"Playbook snapshot is malformed and cannot be refreshed: {snapshot_path}"
-            ) from exc
-
-        with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8", delete=False) as handle:
-            handle.write(playbook_source)
-            temp_path = Path(handle.name)
-
-        try:
-            parsed = parse_playbook(temp_path)
-        finally:
-            temp_path.unlink(missing_ok=True)
-
-        return self.adapter.normalize(parsed, preserved_playbook_path)
+            return normalized_plan_from_playbook_snapshot(
+                snapshot_path=snapshot_path,
+                preserved_playbook_path=preserved_playbook_path,
+                normalize_parsed_playbook=self.adapter.normalize,
+                missing_error=f"Missing playbook snapshot for refresh: {snapshot_path}",
+                malformed_error=f"Playbook snapshot is malformed and cannot be refreshed: {snapshot_path}",
+            )
+        except RuntimeError as exc:
+            raise OrchestratorError(str(exc)) from exc
 
     def _persist_active_run_state(self, run_state: RunState) -> None:
         if self._active_run_state_path is not None:

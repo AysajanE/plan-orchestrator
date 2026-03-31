@@ -78,6 +78,21 @@ class CliTests(unittest.TestCase):
         self.assertIn("Optional saved run id to validate and inspect.", rendered)
         self.assertIn("Rebuild deterministic local orchestrator artifacts only; never touches tracked repo files.", rendered)
 
+    def test_run_help_describes_runtime_policy_and_auto_advance_overrides(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["run", "--help"])
+
+        rendered = " ".join(stdout.getvalue().split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertIn("Optional JSON runtime-policy overlay for this run.", rendered)
+        self.assertIn("Force auto-advance on for this run, even if the runtime policy default is off.", rendered)
+        self.assertIn("Cap the number of items processed for this invocation.", rendered)
+
     def test_show_item_text_format_renders_human_readable_output(self) -> None:
         fake_orchestrator = mock.Mock()
         fake_orchestrator.show_item.return_value = make_item()

@@ -4,32 +4,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from automation.plan_orchestrator.config import (
-    RUNTIME_POLICY_FIELD_NAMES,
-    RuntimePolicyResolution,
-    resolve_run_directories,
-    runtime_policy_snapshot_payload,
-)
+from automation.plan_orchestrator.config import RUNTIME_POLICY_FIELD_NAMES, resolve_run_directories
 from automation.plan_orchestrator.state_machine import StateId
 from automation.plan_orchestrator.state_store import create_run_state, save_run_state
-from automation.plan_orchestrator.tests.support import make_item, make_options, make_plan
-from automation.plan_orchestrator.validators import compute_sha256, write_json_atomic
+from automation.plan_orchestrator.tests.support import (
+    make_item,
+    make_options,
+    make_plan,
+    write_runtime_policy_snapshot,
+)
+from automation.plan_orchestrator.validators import write_json_atomic
 from automation.plan_orchestrator.status import list_run_statuses, load_run_status
-
-
-def write_runtime_policy_snapshot(path: Path, options) -> str:
-    write_json_atomic(
-        path,
-        runtime_policy_snapshot_payload(
-            RuntimePolicyResolution(
-                options=options,
-                sources={field: "default" for field in RUNTIME_POLICY_FIELD_NAMES},
-                repo_control_plane_path=None,
-                overlay_control_plane_path=None,
-            )
-        ),
-    )
-    return compute_sha256(path)
 
 
 class StatusTests(unittest.TestCase):

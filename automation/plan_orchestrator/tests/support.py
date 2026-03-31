@@ -3,7 +3,13 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from automation.plan_orchestrator.config import (
+    RUNTIME_POLICY_FIELD_NAMES,
+    RuntimePolicyResolution,
+    runtime_policy_snapshot_payload,
+)
 from automation.plan_orchestrator.models import NormalizedPlan, PlanItem, RuntimeOptions
+from automation.plan_orchestrator.validators import compute_sha256, write_json_atomic
 
 
 def make_item(
@@ -129,6 +135,21 @@ def write_minimal_playbook(path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def write_runtime_policy_snapshot(path: Path, options) -> str:
+    write_json_atomic(
+        path,
+        runtime_policy_snapshot_payload(
+            RuntimePolicyResolution(
+                options=options,
+                sources={field: "default" for field in RUNTIME_POLICY_FIELD_NAMES},
+                repo_control_plane_path=None,
+                overlay_control_plane_path=None,
+            )
+        ),
+    )
+    return compute_sha256(path)
 
 
 def init_git_repo(repo_root: Path) -> None:
