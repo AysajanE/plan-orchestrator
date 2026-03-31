@@ -128,6 +128,14 @@ def _bool_label(value: bool | None) -> str:
     return "yes" if value else "no"
 
 
+def _render_doctor_detail(value: object) -> str:
+    if isinstance(value, bool) or value is None:
+        return _bool_label(value)
+    if isinstance(value, list):
+        return ", ".join(str(entry) for entry in value) if value else "none"
+    return str(value)
+
+
 def _print_status_table(rows: list[dict]) -> None:
     headers = [
         ("run_id", "RUN"),
@@ -211,6 +219,22 @@ def _print_doctor_text(report: dict) -> None:
             )
             line += f" ({rendered})"
         print(line)
+        for key in ("missing_item_branches", "missing_checkpoint_refs", "missing_worktrees", "orphaned_worktrees", "normalized_plan_error"):
+            if key in check and check[key]:
+                print(f"  {key}={_render_doctor_detail(check[key])}")
+    repairs = report.get("repairs", [])
+    if repairs:
+        print("Repairs:")
+        for repair in repairs:
+            line = f"- {repair['name']}: {repair['status']}"
+            extras = [
+                f"{key}={_render_doctor_detail(value)}"
+                for key, value in repair.items()
+                if key not in {"name", "status"} and value is not None
+            ]
+            if extras:
+                line += " (" + ", ".join(extras) + ")"
+            print(line)
 
 
 def _add_playbook_argument(parser: argparse.ArgumentParser) -> None:
@@ -284,6 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor_cmd.add_argument("--playbook")
     doctor_cmd.add_argument("--run-id")
+    doctor_cmd.add_argument("--fix-safe", action="store_true")
     doctor_cmd.add_argument("--format", choices=("text", "json"), default="text")
 
     return parser
@@ -388,6 +413,7 @@ def main(argv: list[str] | None = None) -> int:
                 repo_root,
                 playbook_path=args.playbook,
                 run_id=args.run_id,
+                fix_safe=bool(args.fix_safe),
             )
             if args.format == "json":
                 print(json.dumps(result, indent=2))

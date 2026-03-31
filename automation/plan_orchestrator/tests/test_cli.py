@@ -252,3 +252,43 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(stderr.getvalue(), "")
         self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_doctor_fix_safe_passes_flag_through_to_runner(self) -> None:
+        payload = {
+            "ok": True,
+            "repo_root": ".",
+            "checks": [],
+            "repairs": [{"name": "rebuild_normalized_plan", "status": "applied"}],
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.run_doctor",
+            return_value=payload,
+            create=True,
+        ) as fake_doctor:
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "doctor",
+                        "--run-id",
+                        "RUN_FIX",
+                        "--fix-safe",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+        fake_doctor.assert_called_once_with(
+            Path("."),
+            playbook_path=None,
+            run_id="RUN_FIX",
+            fix_safe=True,
+        )

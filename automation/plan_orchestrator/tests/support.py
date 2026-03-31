@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from automation.plan_orchestrator.models import NormalizedPlan, PlanItem, RuntimeOptions
@@ -128,3 +129,21 @@ def write_minimal_playbook(path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def init_git_repo(repo_root: Path) -> None:
+    subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "tests@example.com"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.name", "Tests"], cwd=repo_root, check=True)
+
+
+def git_commit_all(repo_root: Path, message: str) -> str:
+    subprocess.run(["git", "add", "-A"], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=repo_root, check=True, capture_output=True, text=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()

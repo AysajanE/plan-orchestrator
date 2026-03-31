@@ -89,6 +89,15 @@ python automation/run_plan_orchestrator.py doctor \
   --format json
 ```
 
+Repair deterministic run-local artifacts when a saved run is missing its normalized plan or has stale local references:
+
+```bash
+python automation/run_plan_orchestrator.py doctor \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --fix-safe \
+  --format json
+```
+
 Inspect one saved run:
 
 ```bash
@@ -260,6 +269,11 @@ python automation/run_plan_orchestrator.py status \
 python automation/run_plan_orchestrator.py doctor \
   --run-id <RUN_ID> \
   --format json
+
+python automation/run_plan_orchestrator.py doctor \
+  --run-id <RUN_ID> \
+  --fix-safe \
+  --format json
 ```
 
 Then inspect:
@@ -268,3 +282,7 @@ Then inspect:
 - the latest `artifact_manifest.*.json` or `audit_packet_manifest.*.json`
 - the latest model report under `.local/ai/plan_orchestrator/runs/<RUN_ID>/...`
 - the preserved worktree path recorded in the escalation manifest
+
+`doctor --fix-safe` only repairs deterministic local orchestrator state.
+It may rebuild `normalized_plan.json` from the saved playbook snapshot and report stale worktrees or refs.
+It does not rerun model stages, rewrite tracked repo content, or auto-resolve manual or external gates.
