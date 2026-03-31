@@ -6,7 +6,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from automation.plan_orchestrator.config import resolve_run_directories
+from automation.plan_orchestrator.config import (
+    RUNTIME_POLICY_FIELD_NAMES,
+    RuntimePolicyResolution,
+    resolve_run_directories,
+    runtime_policy_snapshot_payload,
+)
 from automation.plan_orchestrator.doctor import run_doctor
 from automation.plan_orchestrator.reporting import write_playbook_snapshot
 from automation.plan_orchestrator.state_store import create_run_state, save_run_state
@@ -17,7 +22,22 @@ from automation.plan_orchestrator.tests.support import (
     make_plan,
     write_minimal_playbook,
 )
-from automation.plan_orchestrator.validators import write_json_atomic
+from automation.plan_orchestrator.validators import compute_sha256, write_json_atomic
+
+
+def write_runtime_policy_snapshot(path: Path, options) -> str:
+    write_json_atomic(
+        path,
+        runtime_policy_snapshot_payload(
+            RuntimePolicyResolution(
+                options=options,
+                sources={field: "default" for field in RUNTIME_POLICY_FIELD_NAMES},
+                repo_control_plane_path=None,
+                overlay_control_plane_path=None,
+            )
+        ),
+    )
+    return compute_sha256(path)
 
 
 class DoctorTests(unittest.TestCase):
@@ -232,3 +252,129 @@ class DoctorTests(unittest.TestCase):
         self.assertIn(item_state.worktree_path, run_refs["missing_worktrees"])
         self.assertIn("missing-checkpoint-ref", run_refs["missing_checkpoint_refs"])
         self.assertIn(orphaned_dir.relative_to(repo_root).as_posix(), run_refs["orphaned_worktrees"])
+
+    def test_run_doctor_treats_missing_runtime_policy_snapshot_as_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            playbook_path = repo_root / "playbook.md"
+            write_minimal_playbook(playbook_path)
+            init_git_repo(repo_root)
+            baseline = git_commit_all(repo_root, "seed repo")
+
+            run_id = "RUN_DOCTOR_POLICY_WARNING"
+            dirs = resolve_run_directories(repo_root, run_id)
+            normalized_plan_path = dirs.run_root / "normalized_plan.json"
+            plan = make_plan()
+            write_json_atomic(normalized_plan_path, plan.to_dict())
+            subprocess.run(
+                ["git", "branch", f"orchestrator/run/{run_id}", baseline],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            runtime_policy_path = dirs.run_root / "runtime_policy.json"
+            run_state = create_run_state(
+                run_id=run_id,
+                adapter_id="markdown_playbook_v1",
+                repo_root=repo_root.as_posix(),
+                playbook_source_path=playbook_path.relative_to(repo_root).as_posix(),
+                playbook_source_sha256="a" * 64,
+                normalized_plan_path=normalized_plan_path.relative_to(repo_root).as_posix(),
+                base_head_sha=baseline,
+                run_branch_name=f"orchestrator/run/{run_id}",
+                options=make_options(),
+                plan=plan,
+                runtime_policy_path=runtime_policy_path.relative_to(repo_root).as_posix(),
+                runtime_policy_sha256="f" * 64,
+                runtime_policy_sources={field: "default" for field in RUNTIME_POLICY_FIELD_NAMES},
+            )
+            save_run_state(dirs.run_state_path, run_state)
+
+            with mock.patch(
+                "automation.plan_orchestrator.doctor.assert_clean_agent_environment",
+                return_value=None,
+            ), mock.patch(
+                "automation.plan_orchestrator.doctor.WorktreeManager.ensure_commands_available",
+                return_value=None,
+            ), mock.patch(
+                "automation.plan_orchestrator.doctor.WorktreeManager.assert_git_identity_available",
+                return_value=None,
+            ), mock.patch(
+                "automation.plan_orchestrator.doctor.WorktreeManager.assert_clean_tracked_checkout",
+                return_value=None,
+            ):
+                report = run_doctor(repo_root, run_id=run_id, fix_safe=True)
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["repairs"], [])
+        run_refs = next(entry for entry in report["checks"] if entry["name"] == "run_references")
+        self.assertEqual(run_refs["status"], "warning")
+        self.assertFalse(run_refs["checks"]["runtime_policy_path_exists"])
+        self.assertIsNone(run_refs["checks"]["runtime_policy_sha256_matches"])
+        self.assertIsNone(run_refs["checks"]["runtime_policy_matches_run_state"])
+
+    def test_run_doctor_treats_runtime_policy_drift_as_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            playbook_path = repo_root / "playbook.md"
+            write_minimal_playbook(playbook_path)
+            init_git_repo(repo_root)
+            baseline = git_commit_all(repo_root, "seed repo")
+
+            run_id = "RUN_DOCTOR_POLICY_DRIFT"
+            dirs = resolve_run_directories(repo_root, run_id)
+            normalized_plan_path = dirs.run_root / "normalized_plan.json"
+            plan = make_plan()
+            write_json_atomic(normalized_plan_path, plan.to_dict())
+            subprocess.run(
+                ["git", "branch", f"orchestrator/run/{run_id}", baseline],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            options = make_options()
+            runtime_policy_path = dirs.run_root / "runtime_policy.json"
+            runtime_policy_sha256 = write_runtime_policy_snapshot(runtime_policy_path, options)
+            run_state = create_run_state(
+                run_id=run_id,
+                adapter_id="markdown_playbook_v1",
+                repo_root=repo_root.as_posix(),
+                playbook_source_path=playbook_path.relative_to(repo_root).as_posix(),
+                playbook_source_sha256="a" * 64,
+                normalized_plan_path=normalized_plan_path.relative_to(repo_root).as_posix(),
+                base_head_sha=baseline,
+                run_branch_name=f"orchestrator/run/{run_id}",
+                options=options,
+                plan=plan,
+                runtime_policy_path=runtime_policy_path.relative_to(repo_root).as_posix(),
+                runtime_policy_sha256=runtime_policy_sha256,
+                runtime_policy_sources={field: "default" for field in RUNTIME_POLICY_FIELD_NAMES},
+            )
+            run_state.options.claude_model = "drifted-opus"
+            save_run_state(dirs.run_state_path, run_state)
+
+            with mock.patch(
+                "automation.plan_orchestrator.doctor.assert_clean_agent_environment",
+                return_value=None,
+            ), mock.patch(
+                "automation.plan_orchestrator.doctor.WorktreeManager.ensure_commands_available",
+                return_value=None,
+            ), mock.patch(
+                "automation.plan_orchestrator.doctor.WorktreeManager.assert_git_identity_available",
+                return_value=None,
+            ), mock.patch(
+                "automation.plan_orchestrator.doctor.WorktreeManager.assert_clean_tracked_checkout",
+                return_value=None,
+            ):
+                report = run_doctor(repo_root, run_id=run_id)
+
+        self.assertTrue(report["ok"])
+        run_refs = next(entry for entry in report["checks"] if entry["name"] == "run_references")
+        self.assertEqual(run_refs["status"], "warning")
+        self.assertTrue(run_refs["checks"]["runtime_policy_path_exists"])
+        self.assertTrue(run_refs["checks"]["runtime_policy_sha256_matches"])
+        self.assertFalse(run_refs["checks"]["runtime_policy_matches_run_state"])

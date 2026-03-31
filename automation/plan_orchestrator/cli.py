@@ -176,6 +176,18 @@ def _print_status_text(summary: dict) -> None:
         print(f"Playbook: {summary['playbook_source_path']}")
     if summary.get("normalized_plan_path"):
         print(f"Normalized plan: {summary['normalized_plan_path']}")
+    if summary.get("runtime_policy_path"):
+        print(f"Runtime policy: {summary['runtime_policy_path']}")
+    if summary.get("runtime_policy_sha256"):
+        print(f"Runtime policy sha256: {summary['runtime_policy_sha256']}")
+    runtime_policy_sources = summary.get("runtime_policy_sources") or {}
+    if runtime_policy_sources:
+        rendered_sources = ", ".join(
+            f"{key}={value}"
+            for key, value in runtime_policy_sources.items()
+            if value != "default"
+        )
+        print(f"Runtime policy sources: {rendered_sources or 'all default'}")
 
     pending_action = summary.get("pending_action")
     if pending_action:
@@ -219,7 +231,14 @@ def _print_doctor_text(report: dict) -> None:
             )
             line += f" ({rendered})"
         print(line)
-        for key in ("missing_item_branches", "missing_checkpoint_refs", "missing_worktrees", "orphaned_worktrees", "normalized_plan_error"):
+        for key in (
+            "missing_item_branches",
+            "missing_checkpoint_refs",
+            "missing_worktrees",
+            "orphaned_worktrees",
+            "normalized_plan_error",
+            "runtime_policy_error",
+        ):
             if key in check and check[key]:
                 print(f"  {key}={_render_doctor_detail(check[key])}")
     repairs = report.get("repairs", [])
@@ -305,11 +324,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_cmd = subparsers.add_parser(
         "doctor",
-        help="Run preflight and validation checks without mutating repo state.",
+        help="Diagnose runner state; --fix-safe may rebuild deterministic local artifacts only.",
     )
     doctor_cmd.add_argument("--playbook")
     doctor_cmd.add_argument("--run-id")
-    doctor_cmd.add_argument("--fix-safe", action="store_true")
+    doctor_cmd.add_argument(
+        "--fix-safe",
+        action="store_true",
+        help="Rebuild deterministic local orchestrator artifacts only; never touches tracked repo files.",
+    )
     doctor_cmd.add_argument("--format", choices=("text", "json"), default="text")
 
     return parser

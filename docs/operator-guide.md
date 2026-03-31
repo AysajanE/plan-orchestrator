@@ -98,6 +98,9 @@ Precedence is:
 Each new run snapshots the resolved runtime policy to
 `.local/automation/plan_orchestrator/runs/<RUN_ID>/runtime_policy.json`
 and records its digest plus per-field source map in `run_state.json`.
+`status` and `doctor` validate that snapshot as a provenance artifact.
+If it is missing or no longer matches the saved run state, they report a warning,
+but the run can still continue from `run_state.json`.
 
 List items:
 
@@ -114,7 +117,7 @@ python automation/run_plan_orchestrator.py show-item \
   --item 01
 ```
 
-Run preflight and validation checks without mutating repo state:
+Run diagnostics and validation checks:
 
 ```bash
 python automation/run_plan_orchestrator.py doctor \
@@ -130,6 +133,10 @@ python automation/run_plan_orchestrator.py doctor \
   --fix-safe \
   --format json
 ```
+
+`doctor --fix-safe` only rebuilds deterministic local orchestrator artifacts such as
+`normalized_plan.json`. It does not rewrite tracked repo files, rerun model stages,
+or recreate historical provenance artifacts such as `runtime_policy.json`.
 
 Inspect one saved run:
 

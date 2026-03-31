@@ -8,6 +8,7 @@ from .adapters import build_default_adapter
 from .config import WORKTREES_ROOT, assert_clean_agent_environment, resolve_run_directories
 from .models import RunState
 from .playbook_parser import parse_playbook
+from .runtime_policy import RUNTIME_POLICY_CHECK_KEYS, runtime_policy_integrity
 from .state_store import load_run_state
 from .validators import load_json, resolve_repo_path, validate_named_schema, write_json_atomic
 from .worktree_manager import WorktreeManager
@@ -161,6 +162,7 @@ def _evaluate_run_references(
                 missing_worktrees.append(item_state.worktree_path)
 
     orphaned_worktrees = _find_orphaned_worktrees(repo_root, run_state.run_id, referenced_worktrees)
+    runtime_policy_checks, runtime_policy_details = runtime_policy_integrity(repo_root, run_state)
 
     checks = {
         "playbook_source_path_exists": playbook_path.exists(),
@@ -172,15 +174,20 @@ def _evaluate_run_references(
         "checkpoint_refs_exist": not missing_checkpoint_refs,
         "referenced_worktrees_exist": not missing_worktrees,
     }
+    checks.update(runtime_policy_checks)
 
     status = "ok"
-    if any(
+    hard_failure = any(
         value is False
         for key, value in checks.items()
-        if key != "playbook_snapshot_exists" and value is not None
-    ):
+        if key not in {"playbook_snapshot_exists", *RUNTIME_POLICY_CHECK_KEYS} and value is not None
+    )
+    runtime_policy_warning = any(
+        checks[key] is False for key in RUNTIME_POLICY_CHECK_KEYS if key in checks
+    )
+    if hard_failure:
         status = "error"
-    elif orphaned_worktrees:
+    elif orphaned_worktrees or runtime_policy_warning:
         status = "warning"
 
     payload: dict[str, Any] = {
@@ -195,6 +202,7 @@ def _evaluate_run_references(
     }
     if normalized_plan_error:
         payload["normalized_plan_error"] = normalized_plan_error
+    payload.update(runtime_policy_details)
     return payload
 
 

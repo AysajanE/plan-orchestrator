@@ -5,6 +5,7 @@ from typing import Any
 
 from .config import RUNS_ROOT, resolve_run_directories
 from .models import ItemRunState, RunState
+from .runtime_policy import RUNTIME_POLICY_CHECK_KEYS, runtime_policy_integrity
 from .state_store import load_run_state
 from .validators import resolve_repo_path
 
@@ -77,6 +78,9 @@ def _build_run_status(repo_root: Path, run_state: RunState, run_state_path: Path
         "run_branch_name": run_state.run_branch_name,
         "playbook_source_path": run_state.playbook_source_path,
         "normalized_plan_path": run_state.normalized_plan_path,
+        "runtime_policy_path": run_state.runtime_policy_path,
+        "runtime_policy_sha256": run_state.runtime_policy_sha256,
+        "runtime_policy_sources": run_state.runtime_policy_sources,
         "updated_at_utc": run_state.updated_at_utc,
         "status_level": status_level,
         "exit_code": exit_code,
@@ -95,6 +99,9 @@ def _broken_run_status(*, run_id: str, run_state_path: Path, error: str) -> dict
         "run_branch_name": None,
         "playbook_source_path": None,
         "normalized_plan_path": None,
+        "runtime_policy_path": None,
+        "runtime_policy_sha256": None,
+        "runtime_policy_sources": None,
         "updated_at_utc": None,
         "status_level": "error",
         "exit_code": 2,
@@ -108,6 +115,9 @@ def _broken_run_status(*, run_id: str, run_state_path: Path, error: str) -> dict
             "run_state_path_exists": run_state_path.exists(),
             "playbook_source_path_exists": None,
             "normalized_plan_path_exists": None,
+            "runtime_policy_path_exists": None,
+            "runtime_policy_sha256_matches": None,
+            "runtime_policy_matches_run_state": None,
             "current_item_worktree_exists": None,
             "manual_gate_path_exists": None,
             "escalation_manifest_path_exists": None,
@@ -160,10 +170,15 @@ def _path_checks(
         "normalized_plan_path_exists": resolve_repo_path(
             repo_root, run_state.normalized_plan_path
         ).exists(),
+        "runtime_policy_path_exists": None,
+        "runtime_policy_sha256_matches": None,
+        "runtime_policy_matches_run_state": None,
         "current_item_worktree_exists": None,
         "manual_gate_path_exists": None,
         "escalation_manifest_path_exists": None,
     }
+    runtime_policy_checks, _details = runtime_policy_integrity(repo_root, run_state)
+    checks.update(runtime_policy_checks)
 
     if item_state is None:
         return checks
@@ -188,8 +203,13 @@ def _pending_action(
     focus_item: ItemRunState | None,
     checks: dict[str, bool | None],
 ) -> dict[str, Any] | None:
+    hard_failure = any(
+        value is False
+        for key, value in checks.items()
+        if key not in RUNTIME_POLICY_CHECK_KEYS and value is not None
+    )
     if focus_item is None:
-        if any(value is False for value in checks.values() if value is not None):
+        if hard_failure:
             return {
                 "kind": "repair_local_state",
                 "detail": "Referenced local artifacts are missing.",
@@ -216,7 +236,7 @@ def _pending_action(
             "path": focus_item.latest_paths.escalation_manifest_path,
             "detail": "Operator review is required before continuing.",
         }
-    if any(value is False for value in checks.values() if value is not None):
+    if hard_failure:
         return {
             "kind": "repair_local_state",
             "item_id": focus_item.item_id,
@@ -230,7 +250,16 @@ def _status_health(
     run_state: RunState,
     checks: dict[str, bool | None],
 ) -> tuple[str, int]:
-    if any(value is False for value in checks.values() if value is not None):
+    hard_failure = any(
+        value is False
+        for key, value in checks.items()
+        if key not in RUNTIME_POLICY_CHECK_KEYS and value is not None
+    )
+    runtime_policy_warning = any(
+        checks[key] is False for key in RUNTIME_POLICY_CHECK_KEYS if key in checks
+    )
+
+    if hard_failure:
         return "error", 2
 
     terminal_states = {item.terminal_state for item in run_state.items}
@@ -238,6 +267,8 @@ def _status_health(
         return "error", 2
     if terminal_states & WAITING_TERMINALS:
         return "waiting", 1
+    if runtime_policy_warning:
+        return "warning", 0
     return "ok", 0
 
 
