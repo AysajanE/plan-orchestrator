@@ -222,3 +222,40 @@ class StatusTests(unittest.TestCase):
         self.assertTrue(summary["checks"]["runtime_policy_path_exists"])
         self.assertTrue(summary["checks"]["runtime_policy_sha256_matches"])
         self.assertFalse(summary["checks"]["runtime_policy_matches_run_state"])
+
+    def test_load_run_status_hides_stale_current_item_for_passed_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            run_id = "RUN_STATUS_PASSED"
+            dirs = resolve_run_directories(repo_root, run_id)
+            plan = make_plan()
+
+            playbook_path = repo_root / "playbook.md"
+            playbook_path.write_text("playbook\n", encoding="utf-8")
+            normalized_plan_path = dirs.run_root / "normalized_plan.json"
+            write_json_atomic(normalized_plan_path, plan.to_dict())
+
+            run_state = create_run_state(
+                run_id=run_id,
+                adapter_id="markdown_playbook_v1",
+                repo_root=repo_root.as_posix(),
+                playbook_source_path="playbook.md",
+                playbook_source_sha256="a" * 64,
+                normalized_plan_path=normalized_plan_path.relative_to(repo_root).as_posix(),
+                base_head_sha="deadbeef",
+                run_branch_name=f"orchestrator/run/{run_id}",
+                options=make_options(),
+                plan=plan,
+            )
+            run_state.current_state = StateId.ST130_PASSED.value
+            run_state.current_item_id = "01"
+            item_state = run_state.get_item_state("01")
+            item_state.state = StateId.ST130_PASSED.value
+            item_state.terminal_state = "passed"
+            save_run_state(dirs.run_state_path, run_state)
+
+            summary = load_run_status(repo_root, run_id)
+
+        self.assertEqual(summary["status_level"], "ok")
+        self.assertIsNone(summary["current_item_id"])
+        self.assertIsNone(summary["current_item"])

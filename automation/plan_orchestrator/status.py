@@ -7,7 +7,7 @@ from .config import RUNS_ROOT, resolve_run_directories
 from .models import ItemRunState, RunState
 from .runtime_policy import RUNTIME_POLICY_CHECK_KEYS, runtime_policy_integrity
 from .state_store import load_run_state
-from .validators import resolve_repo_path
+from .validators import path_is_within, resolve_repo_path
 
 
 WAITING_TERMINALS = {"awaiting_human_gate", "blocked_external"}
@@ -74,7 +74,7 @@ def _build_run_status(repo_root: Path, run_state: RunState, run_state_path: Path
     return {
         "run_id": run_state.run_id,
         "current_state": run_state.current_state,
-        "current_item_id": run_state.current_item_id,
+        "current_item_id": current_item["item_id"] if current_item is not None else None,
         "run_branch_name": run_state.run_branch_name,
         "playbook_source_path": run_state.playbook_source_path,
         "normalized_plan_path": run_state.normalized_plan_path,
@@ -127,6 +127,9 @@ def _broken_run_status(*, run_id: str, run_state_path: Path, error: str) -> dict
 
 
 def _focus_item(run_state: RunState) -> ItemRunState | None:
+    if run_state.items and all(item_state.terminal_state == "passed" for item_state in run_state.items):
+        return None
+
     if run_state.current_item_id:
         return run_state.get_item_state(run_state.current_item_id)
 
@@ -164,12 +167,13 @@ def _path_checks(
     run_state_path: Path,
     item_state: ItemRunState | None,
 ) -> dict[str, bool | None]:
+    dirs = resolve_run_directories(repo_root, run_state.run_id)
+    normalized_plan_path = resolve_repo_path(repo_root, run_state.normalized_plan_path)
     checks: dict[str, bool | None] = {
         "run_state_path_exists": run_state_path.exists(),
         "playbook_source_path_exists": resolve_repo_path(repo_root, run_state.playbook_source_path).exists(),
-        "normalized_plan_path_exists": resolve_repo_path(
-            repo_root, run_state.normalized_plan_path
-        ).exists(),
+        "normalized_plan_path_exists": normalized_plan_path.exists(),
+        "normalized_plan_path_within_run_root": path_is_within(normalized_plan_path, dirs.run_root),
         "runtime_policy_path_exists": None,
         "runtime_policy_sha256_matches": None,
         "runtime_policy_matches_run_state": None,

@@ -10,7 +10,14 @@ from .playbook_snapshot import normalized_plan_from_playbook_snapshot
 from .playbook_parser import parse_playbook
 from .runtime_policy import RUNTIME_POLICY_CHECK_KEYS, runtime_policy_integrity
 from .state_store import load_run_state
-from .validators import load_json, resolve_repo_path, validate_named_schema, write_json_atomic
+from .validators import (
+    load_json,
+    path_is_within,
+    repo_relative_path,
+    resolve_repo_path,
+    validate_named_schema,
+    write_json_atomic,
+)
 from .worktree_manager import WorktreeManager
 
 
@@ -131,13 +138,15 @@ def _evaluate_run_references(
     manager: WorktreeManager,
     run_state: RunState,
 ) -> dict[str, Any]:
+    dirs = resolve_run_directories(repo_root, run_state.run_id)
     playbook_path = resolve_repo_path(repo_root, run_state.playbook_source_path)
     normalized_plan_path = resolve_repo_path(repo_root, run_state.normalized_plan_path)
-    snapshot_path = resolve_run_directories(repo_root, run_state.run_id).run_root / "playbook_source_snapshot.md"
+    snapshot_path = dirs.run_root / "playbook_source_snapshot.md"
+    normalized_plan_in_run_root = path_is_within(normalized_plan_path, dirs.run_root)
 
     normalized_plan_valid = False
     normalized_plan_error: str | None = None
-    if normalized_plan_path.exists():
+    if normalized_plan_path.exists() and normalized_plan_in_run_root:
         try:
             validate_named_schema("normalized_plan.schema.json", load_json(normalized_plan_path))
             normalized_plan_valid = True
@@ -167,7 +176,10 @@ def _evaluate_run_references(
     checks = {
         "playbook_source_path_exists": playbook_path.exists(),
         "normalized_plan_path_exists": normalized_plan_path.exists(),
-        "normalized_plan_valid": normalized_plan_valid if normalized_plan_path.exists() else None,
+        "normalized_plan_path_within_run_root": normalized_plan_in_run_root,
+        "normalized_plan_valid": (
+            normalized_plan_valid if normalized_plan_path.exists() and normalized_plan_in_run_root else None
+        ),
         "playbook_snapshot_exists": snapshot_path.exists(),
         "run_branch_exists": manager.branch_exists(run_state.run_branch_name),
         "item_branches_exist": not missing_item_branches,
@@ -236,10 +248,24 @@ def _apply_safe_repairs(
         checks["normalized_plan_path_exists"] is False
         or checks["normalized_plan_valid"] is False
     )
+    dirs = resolve_run_directories(repo_root, run_state.run_id)
+    normalized_plan_path = resolve_repo_path(repo_root, run_state.normalized_plan_path)
+    if not path_is_within(normalized_plan_path, dirs.run_root):
+        repairs.append(
+            {
+                "name": "rebuild_normalized_plan",
+                "status": "skipped",
+                "detail": (
+                    "Refusing to rewrite out-of-scope normalized_plan_path: "
+                    f"{repo_relative_path(repo_root, normalized_plan_path)}"
+                ),
+            }
+        )
+        return repairs
     if not normalized_needs_rebuild:
         return repairs
 
-    snapshot_path = resolve_run_directories(repo_root, run_state.run_id).run_root / "playbook_source_snapshot.md"
+    snapshot_path = dirs.run_root / "playbook_source_snapshot.md"
     if not snapshot_path.exists():
         repairs.append(
             {
@@ -255,7 +281,6 @@ def _apply_safe_repairs(
         snapshot_path=snapshot_path,
         preserved_playbook_path=Path(run_state.playbook_source_path),
     )
-    normalized_plan_path = resolve_repo_path(repo_root, run_state.normalized_plan_path)
     write_json_atomic(normalized_plan_path, plan.to_dict())
     repairs.append(
         {
