@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -26,6 +27,18 @@ class StageResult:
 
 _MARKDOWN_JSON_BLOCK_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 _MARKDOWN_JSON_BLOCK_SEARCH_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_STAGE_ENV_STRIP_KEYS = {
+    "BASH_ENV",
+    "ENV",
+    "PROMPT_COMMAND",
+    "CDPATH",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+}
 
 
 def _require_command(command: str) -> None:
@@ -41,6 +54,7 @@ def _run(
     stdin_text: str | None,
     stdout_path: Path | None,
     stderr_path: Path,
+    env: dict[str, str],
 ) -> int:
     ensure_directory(stderr_path.parent)
     if stdout_path is not None:
@@ -52,6 +66,7 @@ def _run(
         completed = subprocess.run(
             argv,
             cwd=str(cwd),
+            env=env,
             input=stdin_text,
             text=True,
             stdout=stdout_handle,
@@ -64,6 +79,15 @@ def _run(
         if stdout_path is not None:
             stdout_handle.close()
         stderr_handle.close()
+
+
+def _stage_environment(tool_name: str) -> dict[str, str]:
+    env = dict(os.environ)
+    for key in _STAGE_ENV_STRIP_KEYS:
+        env.pop(key, None)
+    env["PLAN_ORCHESTRATOR_STAGE_RUNNER"] = "1"
+    env["PLAN_ORCHESTRATOR_STAGE_TOOL"] = tool_name
+    return env
 
 
 def run_codex_stage(
@@ -109,6 +133,7 @@ def run_codex_stage(
         stdin_text=prompt_text,
         stdout_path=stdout_log,
         stderr_path=stderr_log,
+        env=_stage_environment("codex"),
     )
     if return_code != 0:
         raise StageProcessError(
@@ -175,6 +200,7 @@ def _run_claude_once(
         stdin_text=None,
         stdout_path=report_path,
         stderr_path=stderr_log,
+        env=_stage_environment("claude"),
     )
 
 
