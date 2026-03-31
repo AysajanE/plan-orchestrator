@@ -44,6 +44,8 @@ See:
 
 - `docs/demo-run.md` — exact commands for the launch demo and proof bundle capture
 - `docs/launch-proof.md` — real excerpts and captures from the March 26, 2026 demo runs
+- `docs/release-checklist.md` — operator-focused rollout checklist
+- `docs/troubleshooting.md` — symptom-based troubleshooting guide
 - `examples/launch_demo_playbook/README.md` — shortest repeatable walkthrough
 - `examples/basic_markdown_playbook/README.md` — deeper sequential example with a dependency-ordered behavioral item
 - `docs/comparison.md` — comparison against the obvious baselines
@@ -97,6 +99,8 @@ See:
 
 - `docs/playbook-contract.md`
 - `docs/operator-guide.md`
+- `docs/release-checklist.md`
+- `docs/troubleshooting.md`
 
 ## Intentional v1 layout
 

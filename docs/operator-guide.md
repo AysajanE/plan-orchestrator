@@ -6,6 +6,8 @@ For a quick architecture read before going deep on commands and run artifacts, o
 
 - `docs/assets/plan_orchestrator_workflow.png`
 - `docs/plan_orchestrator_workflow.html`
+- `docs/release-checklist.md`
+- `docs/troubleshooting.md`
 
 ## Runtime invariants
 
@@ -94,6 +96,9 @@ Precedence is:
 3. `run --config <path>`
 4. compatibility env vars such as `PLAN_ORCHESTRATOR_CODEX_MODEL`
 5. explicit CLI flags such as `--auto-advance` and `--max-items`
+
+This means `auto_advance` is no longer controlled only by the command line.
+If the repo or a run overlay enables it, that becomes the starting default for new runs.
 
 Each new run snapshots the resolved runtime policy to
 `.local/automation/plan_orchestrator/runs/<RUN_ID>/runtime_policy.json`
