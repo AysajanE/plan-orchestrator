@@ -283,6 +283,9 @@ class RunState:
     options: RuntimeOptions
     items: list[ItemRunState]
     event_log: list[RunEvent] = field(default_factory=list)
+    runtime_policy_path: Optional[str] = None
+    runtime_policy_sha256: Optional[str] = None
+    runtime_policy_sources: dict[str, str] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RunState":
@@ -303,6 +306,11 @@ class RunState:
             options=RuntimeOptions.from_dict(data["options"]),
             items=[ItemRunState.from_dict(item) for item in data.get("items", [])],
             event_log=[RunEvent.from_dict(item) for item in data.get("event_log", [])],
+            runtime_policy_path=data.get("runtime_policy_path"),
+            runtime_policy_sha256=data.get("runtime_policy_sha256"),
+            runtime_policy_sources=dict(data["runtime_policy_sources"])
+            if data.get("runtime_policy_sources") is not None
+            else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -323,6 +331,9 @@ class RunState:
             "options": self.options.to_dict(),
             "items": [item.to_dict() for item in self.items],
             "event_log": [event.to_dict() for event in self.event_log],
+            "runtime_policy_path": self.runtime_policy_path,
+            "runtime_policy_sha256": self.runtime_policy_sha256,
+            "runtime_policy_sources": self.runtime_policy_sources,
         }
 
     def get_item_state(self, item_id: str) -> ItemRunState:

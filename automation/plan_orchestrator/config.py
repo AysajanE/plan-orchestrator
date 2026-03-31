@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from typing import Optional
 from uuid import uuid4
 
 from .models import RuntimeOptions
+from .validators import resolve_repo_path, utc_now_iso, validate_named_schema
 
 # Intentional public v1 packaging choice:
 # keep the runtime under automation/plan_orchestrator/ and the launcher at
@@ -38,6 +40,33 @@ PROMPTS_ROOT = Path("automation/plan_orchestrator/prompts")
 SCHEMAS_ROOT = Path("automation/plan_orchestrator/schemas")
 
 CLEAN_ENV_CONFIRM_ENV = "PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED"
+DEFAULT_CONTROL_PLANE_PATH = Path("plan_orchestrator.json")
+
+RUNTIME_POLICY_FIELD_NAMES = tuple(RuntimeOptions.__dataclass_fields__.keys())
+RUNTIME_POLICY_SOURCE_VALUES = ("default", "repo_config", "config_file", "env", "cli")
+
+ENV_RUNTIME_POLICY_FIELDS = {
+    "PLAN_ORCHESTRATOR_CODEX_MODEL": ("codex_model", str),
+    "PLAN_ORCHESTRATOR_CODEX_REASONING_EFFORT": ("codex_reasoning_effort", str),
+    "PLAN_ORCHESTRATOR_CLAUDE_MODEL": ("claude_model", str),
+    "PLAN_ORCHESTRATOR_CLAUDE_EFFORT": ("claude_effort", str),
+    "PLAN_ORCHESTRATOR_MAX_FIX_ROUNDS": ("max_fix_rounds", int),
+    "PLAN_ORCHESTRATOR_MAX_REMEDIATION_ROUNDS": ("max_remediation_rounds", int),
+    "PLAN_ORCHESTRATOR_EXECUTION_TIMEOUT_SEC": ("execution_timeout_sec", int),
+    "PLAN_ORCHESTRATOR_VERIFICATION_TIMEOUT_SEC": ("verification_timeout_sec", int),
+    "PLAN_ORCHESTRATOR_AUDIT_TIMEOUT_SEC": ("audit_timeout_sec", int),
+    "PLAN_ORCHESTRATOR_TRIAGE_TIMEOUT_SEC": ("triage_timeout_sec", int),
+    "PLAN_ORCHESTRATOR_FIX_TIMEOUT_SEC": ("fix_timeout_sec", int),
+    "PLAN_ORCHESTRATOR_REMEDIATION_TIMEOUT_SEC": ("remediation_timeout_sec", int),
+}
+
+
+@dataclass(frozen=True)
+class RuntimePolicyResolution:
+    options: RuntimeOptions
+    sources: dict[str, str]
+    repo_control_plane_path: str | None
+    overlay_control_plane_path: str | None
 
 
 @dataclass(frozen=True)
@@ -109,46 +138,149 @@ def _env_int(name: str, default: int) -> int:
 
 def default_runtime_options(
     *,
-    auto_advance: bool,
+    auto_advance: bool | None,
     max_items: Optional[int],
 ) -> RuntimeOptions:
-    return RuntimeOptions(
-        codex_model=_env_str("PLAN_ORCHESTRATOR_CODEX_MODEL", DEFAULT_CODEX_MODEL),
-        codex_reasoning_effort=_env_str(
-            "PLAN_ORCHESTRATOR_CODEX_REASONING_EFFORT",
-            DEFAULT_CODEX_REASONING_EFFORT,
-        ),
-        claude_model=_env_str("PLAN_ORCHESTRATOR_CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
-        claude_effort=_env_str("PLAN_ORCHESTRATOR_CLAUDE_EFFORT", DEFAULT_CLAUDE_EFFORT),
-        auto_advance=auto_advance,
-        max_items=max_items,
-        max_fix_rounds=_env_int("PLAN_ORCHESTRATOR_MAX_FIX_ROUNDS", DEFAULT_MAX_FIX_ROUNDS),
-        max_remediation_rounds=_env_int(
-            "PLAN_ORCHESTRATOR_MAX_REMEDIATION_ROUNDS",
-            DEFAULT_MAX_REMEDIATION_ROUNDS,
-        ),
-        execution_timeout_sec=_env_int(
-            "PLAN_ORCHESTRATOR_EXECUTION_TIMEOUT_SEC",
-            DEFAULT_EXECUTION_TIMEOUT_SEC,
-        ),
-        verification_timeout_sec=_env_int(
-            "PLAN_ORCHESTRATOR_VERIFICATION_TIMEOUT_SEC",
-            DEFAULT_VERIFICATION_TIMEOUT_SEC,
-        ),
-        audit_timeout_sec=_env_int(
-            "PLAN_ORCHESTRATOR_AUDIT_TIMEOUT_SEC",
-            DEFAULT_AUDIT_TIMEOUT_SEC,
-        ),
-        triage_timeout_sec=_env_int(
-            "PLAN_ORCHESTRATOR_TRIAGE_TIMEOUT_SEC",
-            DEFAULT_TRIAGE_TIMEOUT_SEC,
-        ),
-        fix_timeout_sec=_env_int("PLAN_ORCHESTRATOR_FIX_TIMEOUT_SEC", DEFAULT_FIX_TIMEOUT_SEC),
-        remediation_timeout_sec=_env_int(
-            "PLAN_ORCHESTRATOR_REMEDIATION_TIMEOUT_SEC",
-            DEFAULT_REMEDIATION_TIMEOUT_SEC,
-        ),
+    return _resolve_runtime_policy(
+        repo_root=None,
+        config_path=None,
+        cli_auto_advance=auto_advance,
+        cli_max_items=max_items,
+    ).options
+
+
+def resolve_runtime_policy(
+    repo_root: Path,
+    *,
+    config_path: str | Path | None = None,
+    cli_auto_advance: bool | None = None,
+    cli_max_items: int | None = None,
+) -> RuntimePolicyResolution:
+    return _resolve_runtime_policy(
+        repo_root=repo_root,
+        config_path=config_path,
+        cli_auto_advance=cli_auto_advance,
+        cli_max_items=cli_max_items,
     )
+
+
+def runtime_policy_snapshot_payload(resolution: RuntimePolicyResolution) -> dict:
+    payload = {
+        "schema_version": "plan_orchestrator.runtime_policy.v1",
+        "resolved_at_utc": utc_now_iso(),
+        "repo_control_plane_path": resolution.repo_control_plane_path,
+        "overlay_control_plane_path": resolution.overlay_control_plane_path,
+        "sources": dict(resolution.sources),
+        "options": resolution.options.to_dict(),
+    }
+    validate_named_schema("runtime_policy.schema.json", payload)
+    return payload
+
+
+def _resolve_runtime_policy(
+    *,
+    repo_root: Path | None,
+    config_path: str | Path | None,
+    cli_auto_advance: bool | None,
+    cli_max_items: int | None,
+) -> RuntimePolicyResolution:
+    values = _runtime_policy_defaults()
+    sources = {field: "default" for field in RUNTIME_POLICY_FIELD_NAMES}
+
+    repo_control_plane_path: str | None = None
+    overlay_control_plane_path: str | None = None
+
+    if repo_root is not None:
+        repo_config = repo_root / DEFAULT_CONTROL_PLANE_PATH
+        if repo_config.exists():
+            repo_control_plane_path = repo_config.relative_to(repo_root).as_posix()
+            _apply_policy_overrides(
+                values,
+                sources,
+                overrides=_load_control_plane(repo_config),
+                source_label="repo_config",
+            )
+
+    if config_path is not None:
+        if repo_root is None:
+            overlay_path = Path(config_path)
+        else:
+            overlay_path = resolve_repo_path(repo_root, config_path)
+        overlay_control_plane_path = (
+            overlay_path.relative_to(repo_root).as_posix()
+            if repo_root is not None and overlay_path.is_relative_to(repo_root)
+            else overlay_path.as_posix()
+        )
+        _apply_policy_overrides(
+            values,
+            sources,
+            overrides=_load_control_plane(overlay_path),
+            source_label="config_file",
+        )
+
+    env_overrides = _load_env_runtime_policy_overrides()
+    _apply_policy_overrides(values, sources, overrides=env_overrides, source_label="env")
+
+    cli_overrides: dict[str, object] = {}
+    if cli_auto_advance is True:
+        cli_overrides["auto_advance"] = True
+    if cli_max_items is not None:
+        cli_overrides["max_items"] = cli_max_items
+    _apply_policy_overrides(values, sources, overrides=cli_overrides, source_label="cli")
+
+    return RuntimePolicyResolution(
+        options=RuntimeOptions.from_dict(values),
+        sources=sources,
+        repo_control_plane_path=repo_control_plane_path,
+        overlay_control_plane_path=overlay_control_plane_path,
+    )
+
+
+def _runtime_policy_defaults() -> dict[str, object]:
+    return {
+        "codex_model": DEFAULT_CODEX_MODEL,
+        "codex_reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
+        "claude_model": DEFAULT_CLAUDE_MODEL,
+        "claude_effort": DEFAULT_CLAUDE_EFFORT,
+        "auto_advance": False,
+        "max_items": None,
+        "max_fix_rounds": DEFAULT_MAX_FIX_ROUNDS,
+        "max_remediation_rounds": DEFAULT_MAX_REMEDIATION_ROUNDS,
+        "execution_timeout_sec": DEFAULT_EXECUTION_TIMEOUT_SEC,
+        "verification_timeout_sec": DEFAULT_VERIFICATION_TIMEOUT_SEC,
+        "audit_timeout_sec": DEFAULT_AUDIT_TIMEOUT_SEC,
+        "triage_timeout_sec": DEFAULT_TRIAGE_TIMEOUT_SEC,
+        "fix_timeout_sec": DEFAULT_FIX_TIMEOUT_SEC,
+        "remediation_timeout_sec": DEFAULT_REMEDIATION_TIMEOUT_SEC,
+    }
+
+
+def _load_control_plane(path: Path) -> dict[str, object]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    validate_named_schema("control_plane.schema.json", data)
+    return dict(data.get("runtime_policy", {}))
+
+
+def _load_env_runtime_policy_overrides() -> dict[str, object]:
+    overrides: dict[str, object] = {}
+    for env_name, (field_name, caster) in ENV_RUNTIME_POLICY_FIELDS.items():
+        raw = os.environ.get(env_name, "").strip()
+        if not raw:
+            continue
+        overrides[field_name] = caster(raw)
+    return overrides
+
+
+def _apply_policy_overrides(
+    values: dict[str, object],
+    sources: dict[str, str],
+    *,
+    overrides: dict[str, object],
+    source_label: str,
+) -> None:
+    for field_name, value in overrides.items():
+        values[field_name] = value
+        sources[field_name] = source_label
 
 
 def detect_ambient_agent_configs(repo_root: Path) -> list[str]:

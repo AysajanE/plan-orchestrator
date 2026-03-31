@@ -6,6 +6,8 @@ For a quick architecture read before going deep on commands and run artifacts, o
 
 - `docs/assets/plan_orchestrator_workflow.png`
 - `docs/plan_orchestrator_workflow.html`
+- `docs/release-checklist.md`
+- `docs/troubleshooting.md`
 
 ## Runtime invariants
 
@@ -56,7 +58,54 @@ export PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1
 
 Use that override only when you have intentionally reviewed the environment.
 
+To surface those checks without starting a run, use:
+
+```bash
+python automation/run_plan_orchestrator.py doctor \
+  --playbook path/to/playbook.md \
+  --format text
+```
+
 ## Commands
+
+### Runtime Policy Control Plane
+
+The playbook remains the source of truth for item semantics such as `allowed_write_roots`,
+`requires_red_green`, manual gates, and external checks.
+
+Runtime policy can now be tuned with an optional repo-local control plane:
+
+```json
+{
+  "schema_version": "plan_orchestrator.control_plane.v1",
+  "runtime_policy": {
+    "codex_model": "gpt-5.4",
+    "max_fix_rounds": 3,
+    "audit_timeout_sec": 1800
+  }
+}
+```
+
+By default the runtime reads `plan_orchestrator.json` from the repo root.
+You can apply an extra JSON overlay at run time with `run --config ...`.
+
+Precedence is:
+
+1. code defaults
+2. repo `plan_orchestrator.json`
+3. `run --config <path>`
+4. compatibility env vars such as `PLAN_ORCHESTRATOR_CODEX_MODEL`
+5. explicit CLI flags such as `--auto-advance` and `--max-items`
+
+This means `auto_advance` is no longer controlled only by the command line.
+If the repo or a run overlay enables it, that becomes the starting default for new runs.
+
+Each new run snapshots the resolved runtime policy to
+`.local/automation/plan_orchestrator/runs/<RUN_ID>/runtime_policy.json`
+and records its digest plus per-field source map in `run_state.json`.
+`status` and `doctor` validate that snapshot as a provenance artifact.
+If it is missing or no longer matches the saved run state, they report a warning,
+but the run can still continue from `run_state.json`.
 
 List items:
 
@@ -73,12 +122,58 @@ python automation/run_plan_orchestrator.py show-item \
   --item 01
 ```
 
+Run diagnostics and validation checks:
+
+```bash
+python automation/run_plan_orchestrator.py doctor \
+  --playbook path/to/playbook.md \
+  --format json
+```
+
+Repair deterministic run-local artifacts when a saved run is missing its normalized plan or has stale local references:
+
+```bash
+python automation/run_plan_orchestrator.py doctor \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --fix-safe \
+  --format json
+```
+
+`doctor --fix-safe` only rebuilds deterministic local orchestrator artifacts such as
+`normalized_plan.json`. It does not rewrite tracked repo files, rerun model stages,
+or recreate historical provenance artifacts such as `runtime_policy.json`.
+
+Inspect one saved run:
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --format json
+```
+
+List all saved runs:
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --all \
+  --format text
+```
+
 Run the first unfinished item:
 
 ```bash
 python automation/run_plan_orchestrator.py run \
   --playbook path/to/playbook.md \
   --next
+```
+
+Run with an explicit runtime-policy overlay:
+
+```bash
+python automation/run_plan_orchestrator.py run \
+  --playbook path/to/playbook.md \
+  --item 01 \
+  --config ops/runtime-policy.json
 ```
 
 Run a named item:
@@ -147,6 +242,8 @@ Run-control artifacts:
 ```text
 .local/automation/plan_orchestrator/runs/<RUN_ID>/
 ```
+
+That directory now also includes `runtime_policy.json`, the resolved runtime-policy snapshot for the run.
 
 Model JSON reports:
 
@@ -218,9 +315,30 @@ If an item ends in a non-pass terminal state, inspect first:
 .local/automation/plan_orchestrator/runs/<RUN_ID>/items/<ITEM_ID>/attempt-<N>/escalation_manifest.json
 ```
 
+Then query the run surface:
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --run-id <RUN_ID> \
+  --format json
+
+python automation/run_plan_orchestrator.py doctor \
+  --run-id <RUN_ID> \
+  --format json
+
+python automation/run_plan_orchestrator.py doctor \
+  --run-id <RUN_ID> \
+  --fix-safe \
+  --format json
+```
+
 Then inspect:
 
 - `run_state.json`
 - the latest `artifact_manifest.*.json` or `audit_packet_manifest.*.json`
 - the latest model report under `.local/ai/plan_orchestrator/runs/<RUN_ID>/...`
 - the preserved worktree path recorded in the escalation manifest
+
+`doctor --fix-safe` only repairs deterministic local orchestrator state.
+It may rebuild `normalized_plan.json` from the saved playbook snapshot and report stale worktrees or refs.
+It does not rerun model stages, rewrite tracked repo content, or auto-resolve manual or external gates.

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -11,11 +10,12 @@ from .config import (
     CLAUDE_MAX_TURNS_DEFAULT,
     RunDirectories,
     assert_clean_agent_environment,
-    default_runtime_options,
     make_run_id,
     prompt_file,
     resolve_run_directories,
+    resolve_runtime_policy,
     schema_file,
+    runtime_policy_snapshot_payload,
 )
 from .findings import MUTATION_REPORT_SOURCE_TYPE, write_merged_findings_packet
 from .git_checkpoint import (
@@ -26,6 +26,7 @@ from .git_checkpoint import (
     stage_allowed_changes,
 )
 from .models import ItemContext, NormalizedPlan, PlanItem, RunState
+from .playbook_snapshot import normalized_plan_from_playbook_snapshot
 from .playbook_parser import parse_playbook
 from .reporting import (
     artifact_spec,
@@ -53,6 +54,7 @@ from .state_store import (
 )
 from .subprocess_runner import StageProcessError, run_claude_audit, run_codex_stage
 from .validators import (
+    compute_sha256,
     dedupe_preserve_order,
     ensure_directory,
     load_json,
@@ -100,14 +102,21 @@ class PlanOrchestrator:
         item_ids: list[str] | None = None,
         next_only: bool = False,
         external_evidence_dir: str | None = None,
-        auto_advance: bool = False,
+        auto_advance: bool | None = None,
         max_items: int | None = None,
+        config_path: str | Path | None = None,
     ) -> dict[str, Any]:
         playbook = resolve_repo_path(self.repo_root, playbook_path)
 
         run_id = make_run_id()
         dirs = resolve_run_directories(self.repo_root, run_id)
-        options = default_runtime_options(auto_advance=auto_advance, max_items=max_items)
+        policy = resolve_runtime_policy(
+            self.repo_root,
+            config_path=config_path,
+            cli_auto_advance=auto_advance,
+            cli_max_items=max_items,
+        )
+        options = policy.options
         manager = self._preflight_for_run(worktrees_root=dirs.worktrees_root)
 
         parsed = parse_playbook(playbook)
@@ -122,6 +131,9 @@ class PlanOrchestrator:
         plan = self.adapter.normalize(parsed, playbook)
         normalized_plan_path = dirs.run_root / "normalized_plan.json"
         write_json_atomic(normalized_plan_path, plan.to_dict())
+        runtime_policy_path = dirs.run_root / "runtime_policy.json"
+        write_json_atomic(runtime_policy_path, runtime_policy_snapshot_payload(policy))
+        runtime_policy_sha256 = compute_sha256(runtime_policy_path)
 
         run_branch_name = manager.ensure_run_branch(run_id, manager.current_head_sha())
         run_state = create_run_state(
@@ -135,6 +147,9 @@ class PlanOrchestrator:
             run_branch_name=run_branch_name,
             options=options,
             plan=plan,
+            runtime_policy_path=repo_relative_path(self.repo_root, runtime_policy_path),
+            runtime_policy_sha256=runtime_policy_sha256,
+            runtime_policy_sources=policy.sources,
         )
         run_state.current_state = StateId.ST05_PLAN_NORMALIZED.value
         append_event(run_state, actor="orchestrator", message="Playbook normalized.")
@@ -156,8 +171,8 @@ class PlanOrchestrator:
                 dirs=dirs,
                 item_ids=requested,
                 external_evidence_dir=external_evidence_dir,
-                continue_after_queue=auto_advance and item_ids is None,
-                max_items=max_items,
+                continue_after_queue=options.auto_advance and item_ids is None,
+                max_items=options.max_items,
             )
 
             return {
@@ -638,27 +653,16 @@ class PlanOrchestrator:
         snapshot_path: Path,
         preserved_playbook_path: Path,
     ) -> NormalizedPlan:
-        if not snapshot_path.exists():
-            raise OrchestratorError(f"Missing playbook snapshot for refresh: {snapshot_path}")
-
-        snapshot_text = snapshot_path.read_text(encoding="utf-8")
         try:
-            playbook_source = snapshot_text.split("\n---\n\n", 1)[1]
-        except IndexError as exc:
-            raise OrchestratorError(
-                f"Playbook snapshot is malformed and cannot be refreshed: {snapshot_path}"
-            ) from exc
-
-        with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8", delete=False) as handle:
-            handle.write(playbook_source)
-            temp_path = Path(handle.name)
-
-        try:
-            parsed = parse_playbook(temp_path)
-        finally:
-            temp_path.unlink(missing_ok=True)
-
-        return self.adapter.normalize(parsed, preserved_playbook_path)
+            return normalized_plan_from_playbook_snapshot(
+                snapshot_path=snapshot_path,
+                preserved_playbook_path=preserved_playbook_path,
+                normalize_parsed_playbook=self.adapter.normalize,
+                missing_error=f"Missing playbook snapshot for refresh: {snapshot_path}",
+                malformed_error=f"Playbook snapshot is malformed and cannot be refreshed: {snapshot_path}",
+            )
+        except RuntimeError as exc:
+            raise OrchestratorError(str(exc)) from exc
 
     def _persist_active_run_state(self, run_state: RunState) -> None:
         if self._active_run_state_path is not None:

@@ -29,6 +29,9 @@ def create_run_state(
     run_branch_name: str,
     options: RuntimeOptions,
     plan: NormalizedPlan,
+    runtime_policy_path: str | None = None,
+    runtime_policy_sha256: str | None = None,
+    runtime_policy_sources: dict[str, str] | None = None,
 ) -> RunState:
     now = utc_now_iso()
     item_states: list[ItemRunState] = []
@@ -72,6 +75,9 @@ def create_run_state(
         options=options,
         items=item_states,
         event_log=[],
+        runtime_policy_path=runtime_policy_path,
+        runtime_policy_sha256=runtime_policy_sha256,
+        runtime_policy_sources=runtime_policy_sources,
     )
 
 

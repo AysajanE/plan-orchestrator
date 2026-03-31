@@ -83,6 +83,14 @@ def resolve_repo_path(repo_root: Path, path_or_str: str | Path) -> Path:
     return path if path.is_absolute() else repo_root / path
 
 
+def path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def dedupe_preserve_order(values: list[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []

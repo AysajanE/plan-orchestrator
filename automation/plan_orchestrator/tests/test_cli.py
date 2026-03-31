@@ -48,6 +48,51 @@ def make_item() -> dict:
 
 
 class CliTests(unittest.TestCase):
+    def test_status_help_describes_new_options(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["status", "--help"])
+
+        rendered = " ".join(stdout.getvalue().split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertIn("Show one saved run by id.", rendered)
+        self.assertIn("Show every saved run under .local/automation/plan_orchestrator/runs.", rendered)
+        self.assertIn("Exit with the reported run health code instead of always returning zero.", rendered)
+
+    def test_doctor_help_describes_scope_and_fix_safe_boundary(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["doctor", "--help"])
+
+        rendered = " ".join(stdout.getvalue().split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertIn("Optional playbook to parse and normalize without starting a run.", rendered)
+        self.assertIn("Optional saved run id to validate and inspect.", rendered)
+        self.assertIn("Rebuild deterministic local orchestrator artifacts only; never touches tracked repo files.", rendered)
+
+    def test_run_help_describes_runtime_policy_and_auto_advance_overrides(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["run", "--help"])
+
+        rendered = " ".join(stdout.getvalue().split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertIn("Optional JSON runtime-policy overlay for this run.", rendered)
+        self.assertIn("Force auto-advance on for this run, even if the runtime policy default is off.", rendered)
+        self.assertIn("Cap the number of items processed for this invocation.", rendered)
+
     def test_show_item_text_format_renders_human_readable_output(self) -> None:
         fake_orchestrator = mock.Mock()
         fake_orchestrator.show_item.return_value = make_item()
@@ -120,3 +165,220 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["item_id"], "01")
         self.assertEqual(payload["manual_gate"]["gate_type"], "signoff")
+
+    def test_status_json_format_emits_single_run_payload(self) -> None:
+        payload = {
+            "run_id": "RUN_STATUS",
+            "status_level": "ok",
+            "exit_code": 0,
+            "current_state": "ST130_PASSED",
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.load_run_status",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "status",
+                        "--run-id",
+                        "RUN_STATUS",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_status_all_json_format_emits_all_runs_payload(self) -> None:
+        payload = [
+            {"run_id": "RUN_A", "status_level": "ok", "exit_code": 0},
+            {"run_id": "RUN_B", "status_level": "waiting", "exit_code": 1},
+        ]
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.list_run_statuses",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "status",
+                        "--all",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_status_exit_code_can_follow_summary_health(self) -> None:
+        payload = {
+            "run_id": "RUN_WAITING",
+            "status_level": "waiting",
+            "exit_code": 1,
+            "current_state": "ST110_AWAITING_HUMAN_GATE",
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.load_run_status",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "status",
+                        "--run-id",
+                        "RUN_WAITING",
+                        "--format",
+                        "json",
+                        "--exit-code",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_doctor_json_format_emits_diagnostics_payload(self) -> None:
+        payload = {
+            "ok": True,
+            "repo_root": ".",
+            "checks": [
+                {"name": "agent_environment", "status": "ok"},
+                {"name": "playbook_parse", "status": "ok"},
+            ],
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.run_doctor",
+            return_value=payload,
+            create=True,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "doctor",
+                        "--playbook",
+                        "playbook.md",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+
+    def test_doctor_fix_safe_passes_flag_through_to_runner(self) -> None:
+        payload = {
+            "ok": True,
+            "repo_root": ".",
+            "checks": [],
+            "repairs": [{"name": "rebuild_normalized_plan", "status": "applied"}],
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.run_doctor",
+            return_value=payload,
+            create=True,
+        ) as fake_doctor:
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "doctor",
+                        "--run-id",
+                        "RUN_FIX",
+                        "--fix-safe",
+                        "--format",
+                        "json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), payload)
+        fake_doctor.assert_called_once_with(
+            Path("."),
+            playbook_path=None,
+            run_id="RUN_FIX",
+            fix_safe=True,
+        )
+
+    def test_run_passes_config_overlay_to_orchestrator(self) -> None:
+        fake_orchestrator = mock.Mock()
+        fake_orchestrator.run_new.return_value = {
+            "run_id": "RUN_CFG",
+            "current_state": "ST05_PLAN_NORMALIZED",
+            "current_item_id": "01",
+            "last_terminal_state": "passed",
+            "run_state_path": ".local/automation/plan_orchestrator/runs/RUN_CFG/run_state.json",
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.PlanOrchestrator",
+            return_value=fake_orchestrator,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "run",
+                        "--playbook",
+                        "playbook.md",
+                        "--item",
+                        "01",
+                        "--config",
+                        "ops/runtime-policy.json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        fake_orchestrator.run_new.assert_called_once_with(
+            playbook_path="playbook.md",
+            item_id="01",
+            item_ids=None,
+            next_only=False,
+            external_evidence_dir=None,
+            auto_advance=None,
+            max_items=None,
+            config_path="ops/runtime-policy.json",
+        )

@@ -81,6 +81,87 @@
       "items": {
         "$ref": "#/$defs/event"
       }
+    },
+    "runtime_policy_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "runtime_policy_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtime_policy_sources": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "codex_model",
+        "codex_reasoning_effort",
+        "claude_model",
+        "claude_effort",
+        "auto_advance",
+        "max_items",
+        "max_fix_rounds",
+        "max_remediation_rounds",
+        "execution_timeout_sec",
+        "verification_timeout_sec",
+        "audit_timeout_sec",
+        "triage_timeout_sec",
+        "fix_timeout_sec",
+        "remediation_timeout_sec"
+      ],
+      "properties": {
+        "codex_model": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "codex_reasoning_effort": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "claude_model": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "claude_effort": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "auto_advance": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "max_items": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "max_fix_rounds": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "max_remediation_rounds": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "execution_timeout_sec": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "verification_timeout_sec": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "audit_timeout_sec": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "triage_timeout_sec": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "fix_timeout_sec": {
+          "$ref": "#/$defs/runtime_policy_source"
+        },
+        "remediation_timeout_sec": {
+          "$ref": "#/$defs/runtime_policy_source"
+        }
+      }
     }
   },
   "$defs": {
@@ -91,6 +172,15 @@
     "non_empty_string": {
       "type": "string",
       "minLength": 1
+    },
+    "runtime_policy_source": {
+      "enum": [
+        "default",
+        "repo_config",
+        "config_file",
+        "env",
+        "cli"
+      ]
     },
     "sha256": {
       "type": "string",

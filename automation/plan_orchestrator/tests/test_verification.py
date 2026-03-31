@@ -352,6 +352,74 @@ class VerificationTests(unittest.TestCase):
                 ],
             )
 
+    def test_run_codex_stage_sanitizes_shell_and_git_override_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prompt_path = root / "prompt.md"
+            schema_path = root / "schema.json"
+            report_path = root / "report.json"
+            stdout_log = root / "stdout.log"
+            stderr_log = root / "stderr.log"
+            prompt_path.write_text("Do the thing.\n", encoding="utf-8")
+            schema_path.write_text('{"type":"object"}\n', encoding="utf-8")
+
+            captured = {}
+
+            def fake_subprocess_run(*args, **kwargs):
+                captured["env"] = kwargs["env"]
+                return subprocess.CompletedProcess(args[0], 0, "", "")
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "PATH": "/usr/bin",
+                    "OPENAI_API_KEY": "secret",
+                    "BASH_ENV": "/tmp/bashrc",
+                    "ENV": "/tmp/shrc",
+                    "PROMPT_COMMAND": "echo nope",
+                    "CDPATH": "/tmp",
+                    "GIT_DIR": "/tmp/not-this-repo",
+                    "GIT_WORK_TREE": "/tmp/not-this-worktree",
+                    "GIT_INDEX_FILE": "/tmp/index",
+                },
+                clear=True,
+            ), mock.patch(
+                "automation.plan_orchestrator.subprocess_runner._require_command"
+            ), mock.patch(
+                "automation.plan_orchestrator.subprocess_runner.subprocess.run",
+                side_effect=fake_subprocess_run,
+            ), mock.patch(
+                "automation.plan_orchestrator.subprocess_runner.validate_json_file",
+                return_value={"ok": True},
+            ):
+                run_codex_stage(
+                    worktree_path=root,
+                    prompt_path=prompt_path,
+                    schema_path=schema_path,
+                    report_path=report_path,
+                    stdout_log=stdout_log,
+                    stderr_log=stderr_log,
+                    model="gpt-5.4",
+                    reasoning_effort="xhigh",
+                    sandbox="workspace-write",
+                    timeout_sec=60,
+                )
+
+        self.assertEqual(captured["env"]["PATH"], "/usr/bin")
+        self.assertEqual(captured["env"]["OPENAI_API_KEY"], "secret")
+        self.assertEqual(captured["env"]["PLAN_ORCHESTRATOR_STAGE_RUNNER"], "1")
+        self.assertEqual(captured["env"]["PLAN_ORCHESTRATOR_STAGE_TOOL"], "codex")
+        for forbidden in (
+            "BASH_ENV",
+            "ENV",
+            "PROMPT_COMMAND",
+            "CDPATH",
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_INDEX_FILE",
+        ):
+            self.assertNotIn(forbidden, captured["env"])
+
     def test_run_claude_audit_extracts_structured_output(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         schema_path = repo_root / "automation" / "plan_orchestrator" / "schemas" / "audit_report.schema.json"
@@ -396,6 +464,80 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(result.report["summary"], "Structured output wins.")
             saved = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(saved["summary"], "Structured output wins.")
+
+    def test_run_claude_audit_sanitizes_shell_and_git_override_env(self) -> None:
+        repo_root = Path(__file__).resolve().parents[3]
+        schema_path = repo_root / "automation" / "plan_orchestrator" / "schemas" / "audit_report.schema.json"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prompt_path = root / "prompt.md"
+            report_path = root / "claude_audit.json"
+            stderr_log = root / "claude.stderr.log"
+            prompt_path.write_text("Audit.\n", encoding="utf-8")
+
+            envelope = {
+                "type": "result",
+                "subtype": "success",
+                "structured_output": make_claude_audit_report(summary="Structured output wins."),
+                "result": "Legacy prose should be ignored."
+            }
+            captured = {}
+
+            def fake_subprocess_run(*args, **kwargs):
+                captured["env"] = kwargs["env"]
+                kwargs["stdout"].write(json.dumps(envelope))
+                kwargs["stderr"].write("")
+                return subprocess.CompletedProcess(args[0], 0, "", "")
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "PATH": "/usr/bin",
+                    "ANTHROPIC_API_KEY": "secret",
+                    "BASH_ENV": "/tmp/bashrc",
+                    "ENV": "/tmp/shrc",
+                    "PROMPT_COMMAND": "echo nope",
+                    "CDPATH": "/tmp",
+                    "GIT_DIR": "/tmp/not-this-repo",
+                    "GIT_WORK_TREE": "/tmp/not-this-worktree",
+                    "GIT_INDEX_FILE": "/tmp/index",
+                },
+                clear=True,
+            ), mock.patch(
+                "automation.plan_orchestrator.subprocess_runner._require_command"
+            ), mock.patch(
+                "automation.plan_orchestrator.subprocess_runner.subprocess.run",
+                side_effect=fake_subprocess_run,
+            ):
+                run_claude_audit(
+                    worktree_path=root,
+                    prompt_path=prompt_path,
+                    schema_path=schema_path,
+                    report_path=report_path,
+                    stderr_log=stderr_log,
+                    item_id="01",
+                    attempt_number=1,
+                    model="opus",
+                    effort="max",
+                    max_turns=8,
+                    timeout_sec=60,
+                )
+
+        self.assertEqual(captured["env"]["PATH"], "/usr/bin")
+        self.assertEqual(captured["env"]["ANTHROPIC_API_KEY"], "secret")
+        self.assertEqual(captured["env"]["PLAN_ORCHESTRATOR_STAGE_RUNNER"], "1")
+        self.assertEqual(captured["env"]["PLAN_ORCHESTRATOR_STAGE_TOOL"], "claude")
+        for forbidden in (
+            "BASH_ENV",
+            "ENV",
+            "PROMPT_COMMAND",
+            "CDPATH",
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_INDEX_FILE",
+        ):
+            self.assertNotIn(forbidden, captured["env"])
 
     def test_execution_prompt_mentions_artifact_manifest_and_non_red_green_guidance(self) -> None:
         prompt = prompt_text("execution_codex.md")
