@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:control_plane.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "runtime_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.control_plane.v1"
+    },
+    "runtime_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codex_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "codex_reasoning_effort": {
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        "claude_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claude_effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "auto_advance": {
+          "type": "boolean"
+        },
+        "max_items": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "max_fix_rounds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_remediation_rounds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "execution_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "verification_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "audit_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "triage_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fix_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "remediation_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

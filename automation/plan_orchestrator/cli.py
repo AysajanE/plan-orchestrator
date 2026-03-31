@@ -271,8 +271,9 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--item", help="Run one exact step_id.")
     group.add_argument("--items", help="Run a comma-separated list of exact step_id values.")
     group.add_argument("--next", action="store_true", help="Run the first unfinished item.")
+    run_cmd.add_argument("--config", help="Optional JSON runtime-policy overlay.")
     run_cmd.add_argument("--external-evidence-dir")
-    run_cmd.add_argument("--auto-advance", action="store_true")
+    run_cmd.add_argument("--auto-advance", action="store_true", default=None)
     run_cmd.add_argument("--max-items", type=int)
 
     resume_cmd = subparsers.add_parser("resume", help="Resume an existing run.")
@@ -350,8 +351,9 @@ def main(argv: list[str] | None = None) -> int:
                 item_ids=[value.strip() for value in args.items.split(",")] if args.items else None,
                 next_only=bool(args.next),
                 external_evidence_dir=args.external_evidence_dir,
-                auto_advance=bool(args.auto_advance),
+                auto_advance=args.auto_advance,
                 max_items=args.max_items,
+                config_path=args.config,
             )
             print(json.dumps(result, indent=2))
             return 0

@@ -66,6 +66,39 @@ python automation/run_plan_orchestrator.py doctor \
 
 ## Commands
 
+### Runtime Policy Control Plane
+
+The playbook remains the source of truth for item semantics such as `allowed_write_roots`,
+`requires_red_green`, manual gates, and external checks.
+
+Runtime policy can now be tuned with an optional repo-local control plane:
+
+```json
+{
+  "schema_version": "plan_orchestrator.control_plane.v1",
+  "runtime_policy": {
+    "codex_model": "gpt-5.4",
+    "max_fix_rounds": 3,
+    "audit_timeout_sec": 1800
+  }
+}
+```
+
+By default the runtime reads `plan_orchestrator.json` from the repo root.
+You can apply an extra JSON overlay at run time with `run --config ...`.
+
+Precedence is:
+
+1. code defaults
+2. repo `plan_orchestrator.json`
+3. `run --config <path>`
+4. compatibility env vars such as `PLAN_ORCHESTRATOR_CODEX_MODEL`
+5. explicit CLI flags such as `--auto-advance` and `--max-items`
+
+Each new run snapshots the resolved runtime policy to
+`.local/automation/plan_orchestrator/runs/<RUN_ID>/runtime_policy.json`
+and records its digest plus per-field source map in `run_state.json`.
+
 List items:
 
 ```bash
@@ -120,6 +153,15 @@ Run the first unfinished item:
 python automation/run_plan_orchestrator.py run \
   --playbook path/to/playbook.md \
   --next
+```
+
+Run with an explicit runtime-policy overlay:
+
+```bash
+python automation/run_plan_orchestrator.py run \
+  --playbook path/to/playbook.md \
+  --item 01 \
+  --config ops/runtime-policy.json
 ```
 
 Run a named item:
@@ -188,6 +230,8 @@ Run-control artifacts:
 ```text
 .local/automation/plan_orchestrator/runs/<RUN_ID>/
 ```
+
+That directory now also includes `runtime_policy.json`, the resolved runtime-policy snapshot for the run.
 
 Model JSON reports:
 

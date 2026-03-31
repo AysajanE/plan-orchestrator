@@ -292,3 +292,48 @@ class CliTests(unittest.TestCase):
             run_id="RUN_FIX",
             fix_safe=True,
         )
+
+    def test_run_passes_config_overlay_to_orchestrator(self) -> None:
+        fake_orchestrator = mock.Mock()
+        fake_orchestrator.run_new.return_value = {
+            "run_id": "RUN_CFG",
+            "current_state": "ST05_PLAN_NORMALIZED",
+            "current_item_id": "01",
+            "last_terminal_state": "passed",
+            "run_state_path": ".local/automation/plan_orchestrator/runs/RUN_CFG/run_state.json",
+        }
+
+        with mock.patch(
+            "automation.plan_orchestrator.cli.resolve_repo_root",
+            return_value=Path("."),
+        ), mock.patch(
+            "automation.plan_orchestrator.cli.PlanOrchestrator",
+            return_value=fake_orchestrator,
+        ):
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                exit_code = cli.main(
+                    [
+                        "run",
+                        "--playbook",
+                        "playbook.md",
+                        "--item",
+                        "01",
+                        "--config",
+                        "ops/runtime-policy.json",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        fake_orchestrator.run_new.assert_called_once_with(
+            playbook_path="playbook.md",
+            item_id="01",
+            item_ids=None,
+            next_only=False,
+            external_evidence_dir=None,
+            auto_advance=None,
+            max_items=None,
+            config_path="ops/runtime-policy.json",
+        )
