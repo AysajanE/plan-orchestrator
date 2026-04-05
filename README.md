@@ -85,6 +85,7 @@ python automation/run_plan_orchestrator.py supervise status \
 ```
 
 See `docs/supervision-guide.md` for the full supervision contract.
+See `docs/operations-book.md` for live deployment procedure, safe agent briefing, and human-gate handling.
 
 ## Kernel commands vs supervision commands
 
@@ -126,6 +127,8 @@ Use these when you want real operator/live-run truth:
 ## Manual gate boundary
 
 `awaiting_human_gate` remains the only human-only stop.
+
+Operational note: today this is a workflow boundary, not a strong authenticated write boundary. Treat `mark-manual-gate` as a privileged human-held command and brief worker agents accordingly. See `docs/operations-book.md`.
 
 Humans still own:
 
@@ -213,6 +216,7 @@ The runtime remains reproducibility-first and local/offline-first:
 ## Docs
 
 - `docs/playbook-contract.md` — public input contract
+- `docs/operations-book.md` — deployer runbook, safe agent briefing patterns, and human-gate protocol
 - `docs/operator-guide.md` — kernel and operator surface
 - `docs/troubleshooting.md` — snapshot + supervision troubleshooting
 - `docs/release-checklist.md` — rollout checklist
