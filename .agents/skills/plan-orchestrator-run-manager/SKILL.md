@@ -69,6 +69,10 @@ Use plain `resume` when:
 Use `mark-manual-gate` when:
 
 - the current item is waiting for a human decision
+- and the human explicitly instructs you to record that exact decision
+
+Do not treat a generic instruction like "complete the run" as permission to call `mark-manual-gate`.
+If a run reaches `awaiting_human_gate` and the human has not explicitly authorized the gate decision in the current interaction, stop after inspection and wait.
 
 Use `doctor --fix-safe` when:
 
@@ -108,6 +112,7 @@ If it is missing or no longer matches the run state:
 `awaiting_human_gate` remains the only human-only stop.
 
 The supervisor may wait and later resume after an already-recorded approval, but it must not write the manual-gate decision itself.
+You must not write the manual-gate decision yourself unless the human explicitly instructs you to do so in the current interaction.
 
 ## When to open docs
 

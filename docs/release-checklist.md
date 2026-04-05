@@ -2,6 +2,8 @@
 
 This checklist is for operators running `plan-orchestrator` during a real rollout.
 
+Read `docs/operations-book.md` before starting a live supervised run. It contains the required human-gate operating rules and the safe briefing patterns for worker agents.
+
 ## 1. Prepare the checkout
 
 - Start from a clean tracked checkout.
@@ -109,6 +111,12 @@ python automation/run_plan_orchestrator.py status \
 ### Manual gate
 
 Humans still own approval/rejection.
+
+Operational rule:
+
+- do not brief the worker agent to "complete" a run if the playbook may reach `awaiting_human_gate`
+- do not let the same autonomous agent both produce the work and record the gate approval
+- use a human-controlled terminal for `mark-manual-gate`
 
 ```bash
 python automation/run_plan_orchestrator.py mark-manual-gate \

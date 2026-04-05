@@ -247,6 +247,13 @@ python automation/run_plan_orchestrator.py supervise status \
 
 The human boundary is unchanged.
 
+Important current limitation:
+
+- `mark-manual-gate` is a normal CLI write surface, not a strong authenticated approval boundary
+- do not treat a generic instruction like "complete the run" as permission for an agent to call it
+- use a human-controlled terminal for the gate write
+- see `docs/operations-book.md` for the deployer protocol and recommended agent wording
+
 When an item ends in `awaiting_human_gate`:
 
 1. inspect the current run,
