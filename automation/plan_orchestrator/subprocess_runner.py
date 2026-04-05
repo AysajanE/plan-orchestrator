@@ -9,7 +9,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .validators import ValidationError, ensure_directory, load_json, validate_json_file, validate_named_schema, write_json_atomic
+from .supervision_bridge import current_bridge, run_with_active_stage
+from .validators import (
+    ValidationError,
+    ensure_directory,
+    load_json,
+    validate_json_file,
+    validate_named_schema,
+    write_json_atomic,
+)
 
 
 class StageProcessError(RuntimeError):
@@ -27,6 +35,9 @@ class StageResult:
 
 _MARKDOWN_JSON_BLOCK_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 _MARKDOWN_JSON_BLOCK_SEARCH_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_PROMPT_ITEM_ID_RE = re.compile(r"item_id:\s*`?([A-Za-z0-9][A-Za-z0-9._:-]*)`?", re.IGNORECASE)
+_PROMPT_ATTEMPT_RE = re.compile(r"attempt_number:\s*`?(\d+)`?", re.IGNORECASE)
+
 _STAGE_ENV_STRIP_KEYS = {
     "BASH_ENV",
     "ENV",
@@ -46,6 +57,29 @@ def _require_command(command: str) -> None:
         raise StageProcessError(f"Required command is not installed or not in PATH: {command}")
 
 
+def _infer_stage_name(report_path: Path) -> str:
+    name = report_path.name
+    if name.startswith("execution_report"):
+        return "execute"
+    if name.startswith("fix_report"):
+        return "fix"
+    if name.startswith("remediation_report"):
+        return "remediation"
+    if name.startswith("codex_audit_report"):
+        return "audit_codex"
+    if name.startswith("triage_report"):
+        return "triage"
+    return "unknown"
+
+
+def _infer_prompt_identity(prompt_text: str) -> tuple[str | None, int | None]:
+    item_match = _PROMPT_ITEM_ID_RE.search(prompt_text)
+    attempt_match = _PROMPT_ATTEMPT_RE.search(prompt_text)
+    item_id = item_match.group(1) if item_match else None
+    attempt_number = int(attempt_match.group(1)) if attempt_match else None
+    return item_id, attempt_number
+
+
 def _run(
     *,
     argv: list[str],
@@ -55,6 +89,11 @@ def _run(
     stdout_path: Path | None,
     stderr_path: Path,
     env: dict[str, str],
+    stage_name: str | None = None,
+    item_id: str | None = None,
+    attempt_number: int | None = None,
+    child_tool: str | None = None,
+    child_command: str | None = None,
 ) -> int:
     ensure_directory(stderr_path.parent)
     if stdout_path is not None:
@@ -63,18 +102,34 @@ def _run(
     stdout_handle = stdout_path.open("w", encoding="utf-8") if stdout_path else subprocess.DEVNULL
     stderr_handle = stderr_path.open("w", encoding="utf-8")
     try:
-        completed = subprocess.run(
-            argv,
-            cwd=str(cwd),
+        if current_bridge() is None or stage_name is None or item_id is None or attempt_number is None or child_tool is None:
+            completed = subprocess.run(
+                argv,
+                cwd=str(cwd),
+                env=env,
+                input=stdin_text,
+                text=True,
+                stdout=stdout_handle,
+                stderr=stderr_handle,
+                timeout=timeout_sec,
+                check=False,
+            )
+            return completed.returncode
+
+        return run_with_active_stage(
+            argv=argv,
+            cwd=cwd,
             env=env,
-            input=stdin_text,
-            text=True,
-            stdout=stdout_handle,
-            stderr=stderr_handle,
-            timeout=timeout_sec,
-            check=False,
+            timeout_sec=timeout_sec,
+            stdin_text=stdin_text,
+            stdout_handle=stdout_handle,
+            stderr_handle=stderr_handle,
+            stage_name=stage_name,
+            item_id=item_id,
+            attempt_number=attempt_number,
+            child_tool=child_tool,
+            child_command=child_command,
         )
-        return completed.returncode
     finally:
         if stdout_path is not None:
             stdout_handle.close()
@@ -105,6 +160,7 @@ def run_codex_stage(
 ) -> StageResult:
     _require_command("codex")
     prompt_text = prompt_path.read_text(encoding="utf-8")
+    item_id, attempt_number = _infer_prompt_identity(prompt_text)
 
     argv = [
         "codex",
@@ -134,6 +190,11 @@ def run_codex_stage(
         stdout_path=stdout_log,
         stderr_path=stderr_log,
         env=_stage_environment("codex"),
+        stage_name=_infer_stage_name(report_path),
+        item_id=item_id,
+        attempt_number=attempt_number,
+        child_tool="codex",
+        child_command=" ".join(argv),
     )
     if return_code != 0:
         raise StageProcessError(
@@ -170,6 +231,8 @@ def _run_claude_once(
     effort: str,
     max_turns: int,
     timeout_sec: int,
+    item_id: str,
+    attempt_number: int,
 ) -> int:
     argv = [
         "claude",
@@ -201,6 +264,11 @@ def _run_claude_once(
         stdout_path=report_path,
         stderr_path=stderr_log,
         env=_stage_environment("claude"),
+        stage_name="audit_claude",
+        item_id=item_id,
+        attempt_number=attempt_number,
+        child_tool="claude",
+        child_command=" ".join(argv),
     )
 
 
@@ -443,6 +511,8 @@ def run_claude_audit(
         effort=effort,
         max_turns=max_turns,
         timeout_sec=timeout_sec,
+        item_id=item_id,
+        attempt_number=attempt_number,
     )
 
     effort_used = effort
@@ -461,6 +531,8 @@ def run_claude_audit(
                 effort="high",
                 max_turns=max_turns,
                 timeout_sec=timeout_sec,
+                item_id=item_id,
+                attempt_number=attempt_number,
             )
             effort_used = "high"
 

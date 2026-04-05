@@ -3,11 +3,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from contextlib import nullcontext
 
-from .config import DEFAULT_PLAYBOOK_PATH_ENV, default_playbook_path, resolve_repo_root
+from .config import (
+    DEFAULT_PLAYBOOK_PATH_ENV,
+    default_playbook_path,
+    resolve_repo_root,
+    supervised_run_id_override,
+)
 from .doctor import run_doctor
 from .runtime import OrchestratorError, PlanOrchestrator
 from .status import list_run_statuses, load_run_status
+from .supervision_artifacts import FreshnessPolicy
+from .supervision_bridge import kernel_supervision_bridge
+from .supervision_status import build_supervision_status, render_supervision_status_text
+from .supervisor import supervise_resume, supervise_run
 
 
 def _print_table(rows: list[dict]) -> None:
@@ -266,6 +276,90 @@ def _add_playbook_argument(parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--playbook", required=True, help=help_text)
 
 
+def _parse_items_arg(raw_value: str | None) -> list[str] | None:
+    if raw_value is None:
+        return None
+    return [value.strip() for value in raw_value.split(",") if value.strip()]
+
+
+def _add_supervision_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--evidence-inbox-dir",
+        help="Optional local directory watched for blocked_external evidence packets.",
+    )
+    parser.add_argument(
+        "--heartbeat-interval-sec",
+        "--live-probe-interval-sec",
+        dest="live_probe_interval_sec",
+        type=int,
+        help="Override the live probe cadence in seconds.",
+    )
+    parser.add_argument(
+        "--probe-ack-deadline-sec",
+        type=int,
+        help="Override the probe acknowledgement deadline in seconds.",
+    )
+    parser.add_argument(
+        "--stale-after-sec",
+        "--live-stale-timeout-sec",
+        dest="live_stale_timeout_sec",
+        type=int,
+        help="Override the live-attachment stale timeout in seconds.",
+    )
+    parser.add_argument(
+        "--waiting-poll-interval-sec",
+        type=int,
+        help="Override the waiting/manual/evidence poll cadence in seconds.",
+    )
+    parser.add_argument(
+        "--waiting-stale-timeout-sec",
+        type=int,
+        help="Override the waiting-state freshness timeout in seconds.",
+    )
+    parser.add_argument(
+        "--max-auto-resume-attempts",
+        type=int,
+        help="Override the bounded auto-resume budget for recoverable escalated fingerprints.",
+    )
+    parser.add_argument(
+        "--max-wait-seconds",
+        type=int,
+        help="Optional ceiling for how long the supervisor should remain in waiting observation before returning.",
+    )
+
+
+def _freshness_policy_from_args(args: argparse.Namespace) -> FreshnessPolicy:
+    kwargs: dict[str, int] = {}
+    live_probe_interval_sec = getattr(args, "live_probe_interval_sec", None)
+    probe_ack_deadline_sec = getattr(args, "probe_ack_deadline_sec", None)
+    live_stale_timeout_sec = getattr(args, "live_stale_timeout_sec", None)
+    waiting_poll_interval_sec = getattr(args, "waiting_poll_interval_sec", None)
+    waiting_stale_timeout_sec = getattr(args, "waiting_stale_timeout_sec", None)
+
+    if live_probe_interval_sec is not None:
+        kwargs["live_probe_interval_sec"] = args.live_probe_interval_sec
+    if probe_ack_deadline_sec is not None:
+        kwargs["probe_ack_deadline_sec"] = args.probe_ack_deadline_sec
+    if live_stale_timeout_sec is not None:
+        kwargs["live_stale_timeout_sec"] = args.live_stale_timeout_sec
+    if waiting_poll_interval_sec is not None:
+        kwargs["waiting_poll_interval_sec"] = args.waiting_poll_interval_sec
+    if waiting_stale_timeout_sec is not None:
+        kwargs["waiting_stale_timeout_sec"] = args.waiting_stale_timeout_sec
+    return FreshnessPolicy(**kwargs)
+
+
+def _kernel_bridge_context(repo_root, args: argparse.Namespace):
+    if args.command == "run":
+        run_id = supervised_run_id_override()
+        if not run_id:
+            return nullcontext()
+        return kernel_supervision_bridge(repo_root=repo_root, run_id=run_id)
+    if args.command == "resume":
+        return kernel_supervision_bridge(repo_root=repo_root, run_id=args.run_id)
+    return nullcontext()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python automation/run_plan_orchestrator.py",
@@ -371,6 +465,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="Render human-readable text or machine-readable JSON.",
     )
 
+    supervise_cmd = subparsers.add_parser(
+        "supervise",
+        help="Run the additive supervisory control plane around the current kernel.",
+    )
+    supervise_subparsers = supervise_cmd.add_subparsers(dest="supervise_command", required=True)
+
+    supervise_run_cmd = supervise_subparsers.add_parser(
+        "run",
+        help="Start a new run under supervision.",
+    )
+    _add_playbook_argument(supervise_run_cmd)
+    supervise_run_group = supervise_run_cmd.add_mutually_exclusive_group(required=True)
+    supervise_run_group.add_argument("--item", help="Run one exact step_id.")
+    supervise_run_group.add_argument("--items", help="Run a comma-separated list of exact step_id values.")
+    supervise_run_group.add_argument("--next", action="store_true", help="Run the first unfinished item.")
+    supervise_run_cmd.add_argument(
+        "--config",
+        help="Optional JSON runtime-policy overlay for this run.",
+    )
+    supervise_run_cmd.add_argument("--external-evidence-dir")
+    supervise_run_cmd.add_argument(
+        "--auto-advance",
+        action="store_true",
+        default=None,
+        help="Force auto-advance on for this run, even if the runtime policy default is off.",
+    )
+    supervise_run_cmd.add_argument(
+        "--max-items",
+        type=int,
+        help="Cap the number of items processed for this invocation.",
+    )
+    _add_supervision_options(supervise_run_cmd)
+
+    supervise_resume_cmd = supervise_subparsers.add_parser(
+        "resume",
+        help="Resume an existing run under supervision.",
+    )
+    supervise_resume_cmd.add_argument("--run-id", required=True)
+    supervise_resume_cmd.add_argument("--external-evidence-dir")
+    supervise_resume_cmd.add_argument("--auto-advance", action="store_true")
+    _add_supervision_options(supervise_resume_cmd)
+
+    supervise_status_cmd = supervise_subparsers.add_parser(
+        "status",
+        help="Show supervisory status for one saved run.",
+    )
+    supervise_status_cmd.add_argument("--run-id", required=True)
+    supervise_status_cmd.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Render human-readable text or machine-readable JSON.",
+    )
+    supervise_status_cmd.add_argument(
+        "--exit-code",
+        action="store_true",
+        help="Exit with the supervisory status code instead of always returning zero.",
+    )
+
     return parser
 
 
@@ -404,26 +557,28 @@ def main(argv: list[str] | None = None) -> int:
                     "--external-evidence-dir is allowed only with --item or resume, not with --items."
                 )
 
-            result = orchestrator.run_new(
-                playbook_path=args.playbook,
-                item_id=args.item,
-                item_ids=[value.strip() for value in args.items.split(",")] if args.items else None,
-                next_only=bool(args.next),
-                external_evidence_dir=args.external_evidence_dir,
-                auto_advance=args.auto_advance,
-                max_items=args.max_items,
-                config_path=args.config,
-            )
+            with _kernel_bridge_context(repo_root, args):
+                result = orchestrator.run_new(
+                    playbook_path=args.playbook,
+                    item_id=args.item,
+                    item_ids=_parse_items_arg(args.items),
+                    next_only=bool(args.next),
+                    external_evidence_dir=args.external_evidence_dir,
+                    auto_advance=args.auto_advance,
+                    max_items=args.max_items,
+                    config_path=args.config,
+                )
             print(json.dumps(result, indent=2))
             return 0
 
         if args.command == "resume":
             orchestrator = PlanOrchestrator(repo_root)
-            result = orchestrator.resume(
-                run_id=args.run_id,
-                external_evidence_dir=args.external_evidence_dir,
-                auto_advance=bool(args.auto_advance),
-            )
+            with _kernel_bridge_context(repo_root, args):
+                result = orchestrator.resume(
+                    run_id=args.run_id,
+                    external_evidence_dir=args.external_evidence_dir,
+                    auto_advance=bool(args.auto_advance),
+                )
             print(json.dumps(result, indent=2))
             return 0
 
@@ -482,7 +637,60 @@ def main(argv: list[str] | None = None) -> int:
                 _print_doctor_text(result)
             return int(result.get("exit_code", 0 if result.get("ok", True) else 1))
 
+        if args.command == "supervise":
+            freshness_policy = _freshness_policy_from_args(args)
+
+            if args.supervise_command == "run":
+                if args.items and args.external_evidence_dir:
+                    raise OrchestratorError(
+                        "--external-evidence-dir is allowed only with --item or supervised resume, not with --items."
+                    )
+                result = supervise_run(
+                    repo_root=repo_root,
+                    playbook_path=args.playbook,
+                    item_id=args.item,
+                    item_ids=_parse_items_arg(args.items),
+                    next_only=bool(args.next),
+                    config_path=args.config,
+                    external_evidence_dir=args.external_evidence_dir,
+                    auto_advance=args.auto_advance,
+                    max_items=args.max_items,
+                    evidence_inbox_dir=args.evidence_inbox_dir,
+                    freshness_policy=freshness_policy,
+                    max_auto_resume_attempts=args.max_auto_resume_attempts,
+                    max_wait_seconds=args.max_wait_seconds,
+                )
+                print(json.dumps(result, indent=2))
+                return 0
+
+            if args.supervise_command == "resume":
+                result = supervise_resume(
+                    repo_root=repo_root,
+                    run_id=args.run_id,
+                    external_evidence_dir=args.external_evidence_dir,
+                    auto_advance=bool(args.auto_advance),
+                    evidence_inbox_dir=args.evidence_inbox_dir,
+                    freshness_policy=freshness_policy,
+                    max_auto_resume_attempts=args.max_auto_resume_attempts,
+                    max_wait_seconds=args.max_wait_seconds,
+                )
+                print(json.dumps(result, indent=2))
+                return 0
+
+            if args.supervise_command == "status":
+                result = build_supervision_status(repo_root, args.run_id)
+                if args.format == "json":
+                    print(json.dumps(result, indent=2))
+                else:
+                    print(render_supervision_status_text(result))
+                return int(result["supervision_status"]["exit_code"]) if args.exit_code else 0
+
+            raise OrchestratorError(f"Unknown supervise command: {args.supervise_command}")
+
         raise OrchestratorError(f"Unknown command: {args.command}")
+    except KeyboardInterrupt:
+        print("ERROR: interrupted", file=sys.stderr)
+        return 130
     except (OrchestratorError, RuntimeError, FileNotFoundError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

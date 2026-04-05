@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:supervision_active_stage.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "supervisor_session_id",
+    "kernel_invocation_id",
+    "stage_name",
+    "item_id",
+    "attempt_number",
+    "child_tool",
+    "child_pid",
+    "child_command",
+    "started_at_utc",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.supervision_active_stage.v1"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "supervisor_session_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "kernel_invocation_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "stage_name": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "item_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "attempt_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "child_tool": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "child_pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "child_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "started_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -42,6 +42,11 @@ SCHEMAS_ROOT = Path("automation/plan_orchestrator/schemas")
 CLEAN_ENV_CONFIRM_ENV = "PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED"
 DEFAULT_CONTROL_PLANE_PATH = Path("plan_orchestrator.json")
 
+# Internal-only supervisory seam:
+# the parent supervisor preallocates a run id and passes it to the child kernel
+# invocation through this env var. Plain unsupervised runs do not use it.
+SUPERVISED_RUN_ID_OVERRIDE_ENV = "PLAN_ORCHESTRATOR_RUN_ID_OVERRIDE"
+
 RUNTIME_POLICY_FIELD_NAMES = tuple(RuntimeOptions.__dataclass_fields__.keys())
 RUNTIME_POLICY_SOURCE_VALUES = ("default", "repo_config", "config_file", "env", "cli")
 
@@ -92,6 +97,11 @@ def default_playbook_path() -> str | None:
     return value or None
 
 
+def supervised_run_id_override() -> str | None:
+    value = os.environ.get(SUPERVISED_RUN_ID_OVERRIDE_ENV, "").strip()
+    return value or None
+
+
 def resolve_repo_root(start: Path | None = None) -> Path:
     candidate = (start or Path.cwd()).resolve()
     for current in [candidate, *candidate.parents]:
@@ -113,7 +123,16 @@ def resolve_run_directories(repo_root: Path, run_id: str) -> RunDirectories:
     )
 
 
-def make_run_id(now: datetime | None = None) -> str:
+def make_run_id(
+    now: datetime | None = None,
+    *,
+    allow_override: bool = True,
+) -> str:
+    if allow_override:
+        override = supervised_run_id_override()
+        if override:
+            return override
+
     value = now or datetime.now(timezone.utc)
     return "RUN_" + value.strftime("%Y%m%dT%H%M%SZ") + f"_{uuid4().hex}"
 

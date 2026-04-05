@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:supervision_probe_request.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "supervisor_session_id",
+    "kernel_invocation_id",
+    "probe_sequence",
+    "probe_nonce",
+    "issued_at_utc",
+    "expires_at_utc"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.supervision_probe_request.v1"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "supervisor_session_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "kernel_invocation_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "probe_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "probe_nonce": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "issued_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
