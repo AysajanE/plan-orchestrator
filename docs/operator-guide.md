@@ -1,17 +1,10 @@
 # Operator Guide
 
-This guide covers the reusable core runtime shipped in `plan-orchestrator`.
+This guide covers the reusable core runtime shipped in `plan-orchestrator` and the additive supervisory control plane that now wraps it.
 
-For a quick architecture read before going deep on commands and run artifacts, open:
+## 1. Runtime invariants
 
-- `docs/assets/plan_orchestrator_workflow.png`
-- `docs/plan_orchestrator_workflow.html`
-- `docs/release-checklist.md`
-- `docs/troubleshooting.md`
-
-## Runtime invariants
-
-The public v1 engine preserves these invariants:
+The public v1 engine still preserves these invariants:
 
 - one worktree per item attempt
 - direct markdown playbook ingestion, then normalization
@@ -24,18 +17,82 @@ The public v1 engine preserves these invariants:
 - explicit `awaiting_human_gate`, `blocked_external`, and `escalated` terminals
 - conservative auto-advance only after clean pass conditions
 
-## Intentional package layout
+The supervisory layer wraps this kernel; it does not replace it.
 
-The repo intentionally keeps:
+## 2. Two control planes now exist
 
-- `automation/plan_orchestrator/`
-- `automation/run_plan_orchestrator.py`
+### Runtime-policy control plane
 
-That layout is part of the public v1 packaging decision so the repo stays checkout-runnable and prompt/schema asset paths stay stable.
+The existing runtime-policy control plane still tunes:
 
-## Preflight expectations
+- models
+- effort levels
+- timeouts
+- fix/remediation budgets
+- auto-advance defaults
 
-Before a fresh run or resume, the runtime expects:
+It still resolves from:
+
+1. code defaults
+2. repo `plan_orchestrator.json`
+3. `run --config <path>`
+4. compatibility env vars
+5. explicit CLI flags
+
+It still snapshots the resolved payload to:
+
+```text
+.local/automation/plan_orchestrator/runs/<RUN_ID>/runtime_policy.json
+```
+
+This plane is for **kernel behavior tuning and provenance** only.
+
+### Supervisory control plane
+
+The new supervisory plane is separate. It adds:
+
+- live attachment proof
+- fresh heartbeats
+- waiting/terminal observation records
+- bounded automatic diagnose/fix/resume behavior
+- a separate status view
+
+It writes only under:
+
+```text
+.local/automation/plan_orchestrator/runs/<RUN_ID>/supervision/
+```
+
+It does **not** change `run_state.json`.
+
+## 3. Which command to use
+
+### Use kernel commands when you want kernel truth
+
+```bash
+python automation/run_plan_orchestrator.py run ...
+python automation/run_plan_orchestrator.py resume ...
+python automation/run_plan_orchestrator.py status ...
+python automation/run_plan_orchestrator.py doctor ...
+python automation/run_plan_orchestrator.py mark-manual-gate ...
+python automation/run_plan_orchestrator.py refresh-run ...
+```
+
+### Use supervision commands when live/operator truth matters
+
+```bash
+python automation/run_plan_orchestrator.py supervise run ...
+python automation/run_plan_orchestrator.py supervise resume ...
+python automation/run_plan_orchestrator.py supervise status --run-id <RUN_ID>
+```
+
+`status` stays snapshot-only.
+
+`supervise status` is the live supervisory status view.
+
+## 4. Preflight expectations
+
+Before a fresh run or resume, the runtime still expects:
 
 1. a clean tracked checkout,
 2. `git`, `codex`, `claude`, and `python` available,
@@ -50,7 +107,7 @@ Examples of ambient config paths the runtime checks:
 - `<repo>/.claude/settings.json`
 - `<repo>/.mcp.json`
 
-If those are present, the runtime raises a preflight error unless you explicitly set:
+If those are present, the runtime still requires:
 
 ```bash
 export PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1
@@ -66,71 +123,33 @@ python automation/run_plan_orchestrator.py doctor \
   --format text
 ```
 
-## Commands
+## 5. Snapshot commands
 
-### Runtime Policy Control Plane
-
-The playbook remains the source of truth for item semantics such as `allowed_write_roots`,
-`requires_red_green`, manual gates, and external checks.
-
-Runtime policy can now be tuned with an optional repo-local control plane:
-
-```json
-{
-  "schema_version": "plan_orchestrator.control_plane.v1",
-  "runtime_policy": {
-    "codex_model": "gpt-5.4",
-    "max_fix_rounds": 3,
-    "audit_timeout_sec": 1800
-  }
-}
-```
-
-By default the runtime reads `plan_orchestrator.json` from the repo root.
-You can apply an extra JSON overlay at run time with `run --config ...`.
-
-Precedence is:
-
-1. code defaults
-2. repo `plan_orchestrator.json`
-3. `run --config <path>`
-4. compatibility env vars such as `PLAN_ORCHESTRATOR_CODEX_MODEL`
-5. explicit CLI flags such as `--auto-advance` and `--max-items`
-
-This means `auto_advance` is no longer controlled only by the command line.
-If the repo or a run overlay enables it, that becomes the starting default for new runs.
-
-Each new run snapshots the resolved runtime policy to
-`.local/automation/plan_orchestrator/runs/<RUN_ID>/runtime_policy.json`
-and records its digest plus per-field source map in `run_state.json`.
-`status` and `doctor` validate that snapshot as a provenance artifact.
-If it is missing or no longer matches the saved run state, they report a warning,
-but the run can still continue from `run_state.json`.
-
-List items:
+### Inspect one saved run
 
 ```bash
-python automation/run_plan_orchestrator.py list-items \
-  --playbook path/to/playbook.md
-```
-
-Show one item:
-
-```bash
-python automation/run_plan_orchestrator.py show-item \
-  --playbook path/to/playbook.md \
-  --item 01
-```
-
-Run diagnostics and validation checks:
-
-```bash
-python automation/run_plan_orchestrator.py doctor \
-  --playbook path/to/playbook.md \
+python automation/run_plan_orchestrator.py status \
+  --run-id RUN_20260325T120000Z_deadbeef \
   --format json
 ```
 
-Repair deterministic run-local artifacts when a saved run is missing its normalized plan or has stale local references:
+### List all saved runs
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --all \
+  --format text
+```
+
+### Diagnose and validate
+
+```bash
+python automation/run_plan_orchestrator.py doctor \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --format json
+```
+
+### Safe deterministic repair only
 
 ```bash
 python automation/run_plan_orchestrator.py doctor \
@@ -139,75 +158,103 @@ python automation/run_plan_orchestrator.py doctor \
   --format json
 ```
 
-`doctor --fix-safe` only rebuilds deterministic local orchestrator artifacts such as
-`normalized_plan.json`. It does not rewrite tracked repo files, rerun model stages,
-or recreate historical provenance artifacts such as `runtime_policy.json`.
+`doctor --fix-safe` still only rebuilds deterministic local orchestrator artifacts such as `normalized_plan.json`. It does not rewrite tracked repo files, rerun model stages, or recreate historical provenance artifacts such as `runtime_policy.json`.
 
-Inspect one saved run:
+## 6. Supervision commands
 
-```bash
-python automation/run_plan_orchestrator.py status \
-  --run-id RUN_20260325T120000Z_deadbeef \
-  --format json
-```
-
-List all saved runs:
+### Start a new supervised run
 
 ```bash
-python automation/run_plan_orchestrator.py status \
-  --all \
-  --format text
-```
-
-Run the first unfinished item:
-
-```bash
-python automation/run_plan_orchestrator.py run \
-  --playbook path/to/playbook.md \
-  --next
-```
-
-Run with an explicit runtime-policy overlay:
-
-```bash
-python automation/run_plan_orchestrator.py run \
-  --playbook path/to/playbook.md \
-  --item 01 \
-  --config ops/runtime-policy.json
-```
-
-Run a named item:
-
-```bash
-python automation/run_plan_orchestrator.py run \
+python automation/run_plan_orchestrator.py supervise run \
   --playbook path/to/playbook.md \
   --item 01
 ```
 
-Run multiple items in explicit order:
+You can also use:
 
 ```bash
-python automation/run_plan_orchestrator.py run \
+python automation/run_plan_orchestrator.py supervise run \
   --playbook path/to/playbook.md \
-  --items 01,02,03
+  --next
 ```
 
-Resume a prior run:
+Optional supervision-specific flags:
 
 ```bash
-python automation/run_plan_orchestrator.py resume \
+--evidence-inbox-dir /absolute/path/to/inbox
+--heartbeat-interval-sec 15
+--probe-ack-deadline-sec 5
+--stale-after-sec 45
+--waiting-poll-interval-sec 60
+--waiting-stale-timeout-sec 180
+--max-auto-resume-attempts 2
+--max-wait-seconds 600
+```
+
+### Re-enter a saved run under supervision
+
+```bash
+python automation/run_plan_orchestrator.py supervise resume \
   --run-id RUN_20260325T120000Z_deadbeef
 ```
 
-Refresh a saved run onto a descendant branch and rebuild the normalized plan from the saved snapshot:
+If a blocked item already has local evidence ready:
 
 ```bash
-python automation/run_plan_orchestrator.py refresh-run \
+python automation/run_plan_orchestrator.py supervise resume \
   --run-id RUN_20260325T120000Z_deadbeef \
-  --retarget-run-branch-to main
+  --external-evidence-dir /absolute/path/to/evidence
 ```
 
-Record a manual-gate approval or rejection:
+If you want the supervisor to watch a local inbox and resume automatically when evidence appears later:
+
+```bash
+python automation/run_plan_orchestrator.py supervise resume \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --evidence-inbox-dir /absolute/path/to/inbox
+```
+
+### Inspect supervisory status
+
+```bash
+python automation/run_plan_orchestrator.py supervise status \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --format text
+```
+
+Machine-readable output:
+
+```bash
+python automation/run_plan_orchestrator.py supervise status \
+  --run-id RUN_20260325T120000Z_deadbeef \
+  --format json \
+  --exit-code
+```
+
+`supervise status --exit-code` returns the supervisory plane code, not the kernel `status` code.
+
+## 7. Stable `supervise status --exit-code` contract
+
+| supervisory outcome | exit code | meaning |
+|---|---:|---|
+| `live_attached` | 0 | Fresh probe/ack evidence proves live attachment to the current kernel invocation. |
+| `waiting_state_observed` | 10 | Supervisor recently observed a waiting state such as pending manual gate or blocked external evidence. |
+| `attachment_unproven` | 11 | A live run may still exist, but fresh attachment proof is missing or stale. |
+| `terminal_observed` | 12 | Supervisor observed a terminal completion or a parked non-recoverable case. |
+| `snapshot_only` | 13 | No fresh supervisory evidence is available; only snapshot/kernel artifacts are available. |
+
+## 8. Manual-gate workflow
+
+The human boundary is unchanged.
+
+When an item ends in `awaiting_human_gate`:
+
+1. inspect the current run,
+2. review the current attempt bundle,
+3. record approval or rejection with `mark-manual-gate`,
+4. let the supervisor observe that recorded decision and continue only when resume semantics remain truthful.
+
+The supervisor never writes the decision itself.
 
 ```bash
 python automation/run_plan_orchestrator.py mark-manual-gate \
@@ -219,126 +266,87 @@ python automation/run_plan_orchestrator.py mark-manual-gate \
   --evidence-path docs/reviews/signoff.md
 ```
 
-## Neutral example package
+## 9. External evidence workflow
 
-A neutral example adapter and self-contained example playbook family ship under:
+The local-file boundary is unchanged.
 
-```text
-examples/basic_markdown_playbook/
-```
-
-The example demonstrates:
-
-- one item that should end in `awaiting_human_gate`,
-- one item with explicit Red/Green verification,
-- one item that stops in `blocked_external` until local evidence is provided.
-
-See `examples/basic_markdown_playbook/README.md` for the walkthrough.
-
-## Local artifact layout
-
-Run-control artifacts:
-
-```text
-.local/automation/plan_orchestrator/runs/<RUN_ID>/
-```
-
-That directory now also includes `runtime_policy.json`, the resolved runtime-policy snapshot for the run.
-
-Model JSON reports:
-
-```text
-.local/ai/plan_orchestrator/runs/<RUN_ID>/
-```
-
-Per-item worktrees:
-
-```text
-.local/automation/plan_orchestrator/worktrees/<RUN_ID>/item-<ITEM_ID>-attempt-<N>/
-```
-
-Worktree-visible packet for local artifacts:
-
-```text
-<WORKTREE>/.local/plan_orchestrator/packet/
-```
-
-## External evidence workflow
-
-Some items are blocked by design until a human supplies current evidence.
-The runtime does **not** browse the web to satisfy those gates.
-
-When an item requires external evidence, provide a directory when you run or resume that item:
+When an item is `blocked_external`, the runtime still expects a local directory:
 
 ```bash
-python automation/run_plan_orchestrator.py run \
-  --playbook path/to/playbook.md \
-  --item 04 \
+python automation/run_plan_orchestrator.py resume \
+  --run-id RUN_20260325T120000Z_deadbeef \
   --external-evidence-dir /absolute/path/to/evidence
 ```
 
-The runtime copies those files into the canonical run dir, hashes them, and mirrors them into the worktree packet.
+The supervisor can automate that same path, but it still only uses local files.
 
-## Manual-gate workflow
+It does not browse the web or fabricate evidence.
 
-When an item ends in `awaiting_human_gate`:
+## 10. Resume semantics
 
-1. inspect the terminal bundle,
-2. complete the human review or signoff,
-3. record the decision with `mark-manual-gate`,
-4. if approved, the runtime marks the item `passed` and fast-forwards the local run branch,
-5. if rejected, the item becomes `escalated`.
+`resume` still trusts `run_state.json`.
 
-## Resume semantics
+It still:
 
-Resume trusts `run_state.json`.
+- refuses `awaiting_human_gate` until a human decision is recorded,
+- requires evidence for `blocked_external`,
+- resets blocked/external and escalated items to a fresh-attempt boundary,
+- creates a new worktree attempt instead of rewriting history.
 
-If a worktree is missing or stale, v1 does **not** rewrite history.
-It creates a new item attempt from the current integrated run-branch head.
+The supervisor reuses those same semantics. It does not invent a second resume path.
 
-## Auto-advance semantics
+## 11. Supervision artifact layout
 
-Auto-advance is intentionally boring.
-
-It may select the next unfinished item only when:
-
-- all prerequisites are already `passed`,
-- no earlier unfinished item is waiting at a manual gate,
-- no earlier unfinished item is `blocked_external`,
-- no earlier unfinished item is `escalated`.
-
-## Failure inspection
-
-If an item ends in a non-pass terminal state, inspect first:
+Each supervised run now has:
 
 ```text
-.local/automation/plan_orchestrator/runs/<RUN_ID>/items/<ITEM_ID>/attempt-<N>/escalation_manifest.json
+.local/automation/plan_orchestrator/runs/<RUN_ID>/supervision/
 ```
 
-Then query the run surface:
+Contents:
 
-```bash
-python automation/run_plan_orchestrator.py status \
-  --run-id <RUN_ID> \
-  --format json
-
-python automation/run_plan_orchestrator.py doctor \
-  --run-id <RUN_ID> \
-  --format json
-
-python automation/run_plan_orchestrator.py doctor \
-  --run-id <RUN_ID> \
-  --fix-safe \
-  --format json
+```text
+bridge_registration.json
+active_stage.json
+probe_request.json
+probe_ack.json
+control.lock
+heartbeats/
+interventions/
+invocations/
 ```
 
-Then inspect:
+Artifact classes:
 
-- `run_state.json`
-- the latest `artifact_manifest.*.json` or `audit_packet_manifest.*.json`
-- the latest model report under `.local/ai/plan_orchestrator/runs/<RUN_ID>/...`
-- the preserved worktree path recorded in the escalation manifest
+- `bridge_registration.json` — live bridge discovery for the current kernel invocation
+- `active_stage.json` — schema-validated current blocking child-stage metadata
+- `probe_request.json` / `probe_ack.json` — ephemeral nonce challenge/ack files
+- `heartbeats/*.json` — durable per-heartbeat evidence files
+- `interventions/*.json` — durable diagnosis/repair/resume/park action records
+- `invocations/*.stdout.log` / `*.stderr.log` — kernel child logs referenced by interventions
 
-`doctor --fix-safe` only repairs deterministic local orchestrator state.
-It may rebuild `normalized_plan.json` from the saved playbook snapshot and report stale worktrees or refs.
-It does not rerun model stages, rewrite tracked repo content, or auto-resolve manual or external gates.
+## 12. Inspection order
+
+When live/operator truth matters, inspect in this order:
+
+1. `supervise status --run-id ...`
+2. `status --run-id ...`
+3. `doctor --run-id ...`
+4. `run_state.json`
+5. current item `latest_paths`
+6. `manual_gate.json` or `escalation_manifest.json`
+7. model reports under `.local/ai/plan_orchestrator/runs/<RUN_ID>/`
+
+When only kernel snapshot truth matters, skip step 1 and start with `status`.
+
+## 13. Important scope note
+
+The supervisor preserves current kernel resume semantics.
+
+That means:
+
+- automatic recovery safely resumes the same blocked/external/escalated frontier;
+- manual-gate continuation is automatically resumed only when doing so remains truthful for the current resume semantics;
+- explicit historical `run --items ...` queue intent is **not** reconstructed into a new kernel state machine.
+
+If you want run-level continuation after a saved stop, `supervise resume` is the correct operator entry point.

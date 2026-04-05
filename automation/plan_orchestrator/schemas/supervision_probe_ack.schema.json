@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:supervision_probe_ack.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "supervisor_session_id",
+    "kernel_invocation_id",
+    "probe_sequence",
+    "probe_nonce",
+    "acked_at_utc",
+    "kernel_snapshot"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.supervision_probe_ack.v1"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "supervisor_session_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "kernel_invocation_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "probe_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "probe_nonce": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "acked_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "kernel_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_state_path",
+        "run_state_sha256",
+        "current_state",
+        "current_item_id",
+        "active_stage_present",
+        "active_stage_path",
+        "active_stage_sha256",
+        "run_state_updated_at_utc"
+      ],
+      "properties": {
+        "run_state_path": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "run_state_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "current_state": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "current_item_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "active_stage_present": {
+          "type": "boolean"
+        },
+        "active_stage_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "active_stage_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "run_state_updated_at_utc": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

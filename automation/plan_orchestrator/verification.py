@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .git_checkpoint import scope_check_for_committed_changes
+from .supervision_bridge import current_bridge, run_with_active_stage
 from .validators import ensure_directory, repo_relative_path, utc_now_iso, validate_named_schema, write_json_atomic
 
 
@@ -42,20 +43,38 @@ def _run_shell_command(
     *,
     env: dict[str, str],
     timeout_sec: int,
+    item_context: dict[str, Any],
 ) -> dict[str, Any]:
     ensure_directory(log_path.parent)
     with log_path.open("w", encoding="utf-8") as handle:
         try:
-            completed = subprocess.run(
-                ["bash", "-c", command],
-                cwd=str(cwd),
-                env=env,
-                text=True,
-                stdout=handle,
-                stderr=subprocess.STDOUT,
-                check=False,
-                timeout=timeout_sec,
-            )
+            if current_bridge() is None:
+                completed = subprocess.run(
+                    ["bash", "-c", command],
+                    cwd=str(cwd),
+                    env=env,
+                    text=True,
+                    stdout=handle,
+                    stderr=subprocess.STDOUT,
+                    check=False,
+                    timeout=timeout_sec,
+                )
+                return_code = completed.returncode
+            else:
+                return_code = run_with_active_stage(
+                    argv=["bash", "-c", command],
+                    cwd=cwd,
+                    env=env,
+                    timeout_sec=timeout_sec,
+                    stdin_text=None,
+                    stdout_handle=handle,
+                    stderr_handle=handle,
+                    stage_name="verify",
+                    item_id=str(item_context["item"]["item_id"]),
+                    attempt_number=int(item_context["stage_context"]["attempt_number"]),
+                    child_tool="bash",
+                    child_command=command,
+                )
         except subprocess.TimeoutExpired:
             handle.write(f"\nCommand timed out after {timeout_sec} seconds.\n")
             return {
@@ -64,9 +83,9 @@ def _run_shell_command(
                 "failure_kind": "timeout",
                 "timeout_sec": timeout_sec,
             }
-    status = "pass" if completed.returncode == 0 else "fail"
+    status = "pass" if return_code == 0 else "fail"
     return {
-        "exit_code": completed.returncode,
+        "exit_code": return_code,
         "status": status,
         "failure_kind": "exit_nonzero" if status == "fail" else None,
         "timeout_sec": None,
@@ -160,6 +179,7 @@ def run_verification(
                 log_path,
                 env=verification_env,
                 timeout_sec=timeout_sec,
+                item_context=item_context,
             )
             command_results.append(
                 {

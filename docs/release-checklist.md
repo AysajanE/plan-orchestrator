@@ -15,9 +15,9 @@ export PLAN_ORCHESTRATOR_CLEAN_ENV_CONFIRMED=1
 
 ## 2. Decide the runtime policy
 
-- If this release needs non-default model choices, time limits, retry budgets, or auto-advance defaults, set them in `plan_orchestrator.json`.
-- If this run needs a one-off override, prepare a JSON overlay and pass it with `run --config ...`.
-- Treat the resolved runtime policy as part of the release record. Every run snapshots it.
+- If the release needs non-default model choices, time limits, retry budgets, or auto-advance defaults, set them in `plan_orchestrator.json`.
+- If the run needs a one-off override, prepare a JSON overlay and pass it with `run --config ...` or `supervise run --config ...`.
+- Treat the resolved runtime policy snapshot as part of the release record.
 
 ## 3. Run diagnostics before starting
 
@@ -31,64 +31,84 @@ python automation/run_plan_orchestrator.py doctor \
 
 Do not start the release run until this check is clean or you understand every reported issue.
 
-## 4. Start the release run
+## 4. Start the release run under supervision
 
-Choose the smallest correct scope:
+Use the supervision surface for a real monitored operator run.
 
-- One item:
+One item:
 
 ```bash
-python automation/run_plan_orchestrator.py run \
+python automation/run_plan_orchestrator.py supervise run \
   --playbook path/to/playbook.md \
   --item 01
 ```
 
-- First unfinished item:
+First unfinished item:
 
 ```bash
-python automation/run_plan_orchestrator.py run \
+python automation/run_plan_orchestrator.py supervise run \
   --playbook path/to/playbook.md \
   --next
 ```
 
-- One-off runtime-policy overlay:
+One-off runtime-policy overlay:
 
 ```bash
-python automation/run_plan_orchestrator.py run \
+python automation/run_plan_orchestrator.py supervise run \
   --playbook path/to/playbook.md \
   --item 01 \
   --config ops/runtime-policy.json
 ```
 
-## 5. Monitor the run
-
-Use `status` rather than reading raw files first:
+Optional blocked-external inbox watch:
 
 ```bash
-python automation/run_plan_orchestrator.py status \
+python automation/run_plan_orchestrator.py supervise run \
+  --playbook path/to/playbook.md \
+  --item 03 \
+  --evidence-inbox-dir /absolute/path/to/inbox
+```
+
+## 5. Monitor the run truthfully
+
+Use `supervise status` when live/operator truth matters:
+
+```bash
+python automation/run_plan_orchestrator.py supervise status \
   --run-id <RUN_ID> \
   --format text
 ```
 
-Use `--format json --exit-code` when this is being checked by automation:
+Use machine-readable supervisory exit codes when automation needs them:
 
 ```bash
-python automation/run_plan_orchestrator.py status \
+python automation/run_plan_orchestrator.py supervise status \
   --run-id <RUN_ID> \
   --format json \
   --exit-code
 ```
 
-Expected meanings:
+Stable supervisory exit codes:
 
-- `ok`: the run is healthy
-- `warning`: the run is usable, but part of the provenance trail needs attention
-- `waiting`: the run is waiting for a person or outside evidence
-- `error`: the run or its local state needs intervention
+- `0` — `live_attached`
+- `10` — `waiting_state_observed`
+- `11` — `attachment_unproven`
+- `12` — `terminal_observed`
+- `13` — `snapshot_only`
+
+Use kernel `status` for authoritative saved kernel state:
+
+```bash
+python automation/run_plan_orchestrator.py status \
+  --run-id <RUN_ID> \
+  --format json
+```
 
 ## 6. Handle stop points correctly
 
-When `status` shows a manual gate:
+### Manual gate
+
+Humans still own approval/rejection.
 
 ```bash
 python automation/run_plan_orchestrator.py mark-manual-gate \
@@ -99,25 +119,31 @@ python automation/run_plan_orchestrator.py mark-manual-gate \
   --note "Required review completed."
 ```
 
-When the run is blocked on outside evidence:
+### Blocked external evidence
+
+Use only local evidence files:
 
 ```bash
-python automation/run_plan_orchestrator.py resume \
+python automation/run_plan_orchestrator.py supervise resume \
   --run-id <RUN_ID> \
   --external-evidence-dir /absolute/path/to/evidence
 ```
 
-When the run is escalated, inspect first before choosing the next action:
+Or keep the supervisor watching an inbox:
 
 ```bash
-python automation/run_plan_orchestrator.py status \
+python automation/run_plan_orchestrator.py supervise resume \
   --run-id <RUN_ID> \
-  --format json
+  --evidence-inbox-dir /absolute/path/to/inbox
 ```
+
+### Escalated
+
+Inspect first. The supervisor may repair or retry bounded recoverable cases, but it will park non-recoverable cases truthfully rather than inventing progress.
 
 ## 7. Repair only the orchestrator's local bookkeeping
 
-If the run's local artifacts drift or a deterministic file is missing, use safe repair:
+If deterministic run-local artifacts drift, safe repair is still:
 
 ```bash
 python automation/run_plan_orchestrator.py doctor \
@@ -126,14 +152,16 @@ python automation/run_plan_orchestrator.py doctor \
   --format json
 ```
 
-`doctor --fix-safe` only rebuilds deterministic local orchestrator artifacts. It does not rewrite tracked repo files, rerun model stages, or recreate historical provenance artifacts such as `runtime_policy.json`.
+The supervisor reuses this exact boundary. It does not widen it.
 
 ## 8. Confirm the final release record
 
 Before merging or handing off:
 
-- check `status --run-id ...`
-- confirm the expected terminal state
+- inspect `supervise status --run-id ...`
+- inspect `status --run-id ...`
+- confirm the expected kernel terminal state
+- confirm the supervision outcome is truthful
 - confirm the latest artifact paths exist
 - confirm any runtime-policy warning is understood
 - keep the run directory for auditability
@@ -142,6 +170,7 @@ Useful files:
 
 - `.local/automation/plan_orchestrator/runs/<RUN_ID>/run_state.json`
 - `.local/automation/plan_orchestrator/runs/<RUN_ID>/runtime_policy.json`
+- `.local/automation/plan_orchestrator/runs/<RUN_ID>/supervision/`
 - `.local/automation/plan_orchestrator/runs/<RUN_ID>/items/<ITEM_ID>/attempt-<N>/`
 - `.local/ai/plan_orchestrator/runs/<RUN_ID>/`
 
@@ -150,6 +179,7 @@ Useful files:
 Start with:
 
 ```bash
+python automation/run_plan_orchestrator.py supervise status --run-id <RUN_ID> --format json
 python automation/run_plan_orchestrator.py status --run-id <RUN_ID> --format json
 python automation/run_plan_orchestrator.py doctor --run-id <RUN_ID> --format json
 ```

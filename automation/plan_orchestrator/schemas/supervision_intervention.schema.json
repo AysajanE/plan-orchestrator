@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:supervision_intervention.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "supervisor_session_id",
+    "intervention_sequence",
+    "observed_at_utc",
+    "action_kind",
+    "item_id",
+    "attempt_number",
+    "terminal_state",
+    "recoverability_class",
+    "fingerprint",
+    "reason",
+    "result_status",
+    "command",
+    "related_paths",
+    "evidence_paths",
+    "notes",
+    "evidence_package_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.supervision_intervention.v1"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "supervisor_session_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "intervention_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "observed_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "action_kind": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "item_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "attempt_number": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "terminal_state": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recoverability_class": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fingerprint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "result_status": {
+      "enum": [
+        "applied",
+        "skipped",
+        "waiting",
+        "parked",
+        "observed",
+        "failed"
+      ]
+    },
+    "command": {
+      "$ref": "#/$defs/string_list"
+    },
+    "related_paths": {
+      "$ref": "#/$defs/string_list"
+    },
+    "evidence_paths": {
+      "$ref": "#/$defs/string_list"
+    },
+    "notes": {
+      "$ref": "#/$defs/string_list"
+    },
+    "evidence_package_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

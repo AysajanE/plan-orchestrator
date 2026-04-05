@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plan-orchestrator:schema:supervision_bridge_registration.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "supervisor_session_id",
+    "kernel_invocation_id",
+    "bridge_pid",
+    "bridge_started_at_utc",
+    "run_state_path"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "plan_orchestrator.supervision_bridge_registration.v1"
+    },
+    "run_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "supervisor_session_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "kernel_invocation_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "bridge_pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "bridge_started_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run_state_path": {
+      "$ref": "#/$defs/non_empty_string"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
