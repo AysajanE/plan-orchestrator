@@ -229,3 +229,5 @@ python -m unittest discover -s automation/plan_orchestrator/tests -t .
 ```
 
 Capture that command's output as the package verification record for the extracted repo.
+
+For supervisory-lane verification after apply, see `docs/supervision-guide.md#15-post-apply-verification`.

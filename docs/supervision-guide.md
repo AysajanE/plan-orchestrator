@@ -244,3 +244,60 @@ python automation/run_plan_orchestrator.py doctor \
   --run-id <RUN_ID> \
   --format json
 ```
+
+## 15. Post-Apply Verification
+
+Run these checks after landing the supervisory lane into a checkout:
+
+1. Run the full repo test suite:
+
+```bash
+python -m unittest discover -s automation/plan_orchestrator/tests -t .
+```
+
+2. Run the focused supervision suite if you want the narrowest lane-specific signal:
+
+```bash
+python -m unittest \
+  automation.plan_orchestrator.tests.test_supervise_cli \
+  automation.plan_orchestrator.tests.test_supervision_liveness \
+  automation.plan_orchestrator.tests.test_supervision_recovery \
+  automation.plan_orchestrator.tests.test_supervision_smoke
+```
+
+3. Confirm the new command surface is present:
+
+```bash
+python automation/run_plan_orchestrator.py supervise --help
+python automation/run_plan_orchestrator.py supervise status --help
+```
+
+4. If you already have a saved unsupervised run, confirm the supervision plane fails closed and does not overclaim liveness:
+
+```bash
+python automation/run_plan_orchestrator.py supervise status \
+  --run-id <EXISTING_UNSUPERVISED_RUN_ID> \
+  --format json \
+  --exit-code
+```
+
+Expected outcome:
+
+- exit code `13`
+- `supervision_status.claim_class == "snapshot_only"`
+- no false `live_attached` claim without a live bridge and fresh heartbeat ledger
+
+5. If you already have a supervised waiting run, confirm waiting observation remains distinct from live attachment:
+
+```bash
+python automation/run_plan_orchestrator.py supervise status \
+  --run-id <EXISTING_SUPERVISED_WAITING_RUN_ID> \
+  --format json \
+  --exit-code
+```
+
+Expected outcome:
+
+- exit code `10`
+- `supervision_status.claim_class == "waiting_state_observed"`
+- kernel `status` still reports the underlying waiting reason
