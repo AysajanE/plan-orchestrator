@@ -19,7 +19,9 @@ This document exists to prevent a specific failure mode:
 
 The kernel and supervisor treat `awaiting_human_gate` as the only human-only stop.
 Today, that boundary is operationally enforced by team procedure and agent instructions.
-It is not a strong authentication boundary.
+It is not a strong authentication boundary, but the CLI now supports an optional
+proof-of-possession token and denies manual-gate writes from model/supervision
+automation contexts by default.
 
 Treat `mark-manual-gate` as a privileged operational command.
 
@@ -194,6 +196,19 @@ When approving a gate:
 - confirm the gate is still `pending`
 - confirm the evidence path you cite is the one you actually reviewed
 - record a meaningful `--note`
+- when using local hardening, keep the token outside worker-agent shells and pass it with `--approval-token-file`
+
+Optional token setup:
+
+```bash
+python - <<'PY'
+import hashlib, getpass
+token = getpass.getpass('manual gate token: ')
+print(hashlib.sha256(token.encode('utf-8')).hexdigest())
+PY
+
+export PLAN_ORCHESTRATOR_MANUAL_GATE_TOKEN_SHA256=<printed-sha256>
+```
 
 Example:
 
@@ -204,7 +219,8 @@ python automation/run_plan_orchestrator.py mark-manual-gate \
   --decision approved \
   --by "Reviewer Name" \
   --note "Reviewed the gate packet and approve this handoff." \
-  --evidence-path /absolute/path/to/reviewed/evidence
+  --evidence-path /absolute/path/to/reviewed/evidence \
+  --approval-token-file /secure/local/path/manual-gate-token.txt
 ```
 
 Do not ask the worker agent to synthesize the reviewer identity, note, or evidence path.
@@ -278,13 +294,13 @@ Use:
 
 ## 10. Current Limitation
 
-Today, `mark-manual-gate` is a normal CLI command with no strong caller authentication.
+Today, `mark-manual-gate` is still a local CLI command without organization-grade caller authentication.
 
 That means:
 
 - the boundary is real in workflow semantics,
-- but weak in authorization,
-- so the team must enforce it operationally until the runtime is hardened.
+- but the optional token is only proof-of-possession,
+- so the team must still enforce separation of duties operationally until a real identity/RBAC integration exists.
 
 If you remember only one rule, remember this:
 

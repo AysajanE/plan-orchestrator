@@ -47,6 +47,19 @@ DEFAULT_CONTROL_PLANE_PATH = Path("plan_orchestrator.json")
 # invocation through this env var. Plain unsupervised runs do not use it.
 SUPERVISED_RUN_ID_OVERRIDE_ENV = "PLAN_ORCHESTRATOR_RUN_ID_OVERRIDE"
 
+# Optional local-first manual-gate hardening.  When
+# PLAN_ORCHESTRATOR_MANUAL_GATE_TOKEN_SHA256 is set, mark-manual-gate requires
+# an operator-supplied token whose SHA-256 digest matches this value.  This is
+# not a complete identity system; it is a proof-of-possession boundary that lets
+# teams keep the approval secret out of worker-agent shells.
+MANUAL_GATE_TOKEN_SHA256_ENV = "PLAN_ORCHESTRATOR_MANUAL_GATE_TOKEN_SHA256"
+
+# Model stages and supervised kernel children are denied manual-gate writes by
+# default.  This explicit override is intentionally noisy for the rare case
+# where a human-held shell inherits supervision env vars and still needs to
+# record a gate decision.
+MANUAL_GATE_ALLOW_AUTOMATION_ENV = "PLAN_ORCHESTRATOR_ALLOW_MANUAL_GATE_WRITE"
+
 RUNTIME_POLICY_FIELD_NAMES = tuple(RuntimeOptions.__dataclass_fields__.keys())
 RUNTIME_POLICY_SOURCE_VALUES = ("default", "repo_config", "config_file", "env", "cli")
 

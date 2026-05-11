@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from contextlib import nullcontext
+from pathlib import Path
 
 from .config import (
     DEFAULT_PLAYBOOK_PATH_ENV,
@@ -282,6 +283,16 @@ def _parse_items_arg(raw_value: str | None) -> list[str] | None:
     return [value.strip() for value in raw_value.split(",") if value.strip()]
 
 
+def _manual_gate_approval_token_from_args(args: argparse.Namespace) -> str | None:
+    token = getattr(args, "approval_token", None)
+    token_file = getattr(args, "approval_token_file", None)
+    if token and token_file:
+        raise OrchestratorError("Use only one of --approval-token or --approval-token-file.")
+    if token_file:
+        return Path(token_file).read_text(encoding="utf-8").strip()
+    return token
+
+
 def _add_supervision_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--evidence-inbox-dir",
@@ -420,6 +431,20 @@ def build_parser() -> argparse.ArgumentParser:
     gate_cmd.add_argument("--by", required=True)
     gate_cmd.add_argument("--note", required=True)
     gate_cmd.add_argument("--evidence-path", action="append", default=[])
+    gate_cmd.add_argument(
+        "--approval-token",
+        help=(
+            "Optional manual-gate proof token. Required when "
+            "PLAN_ORCHESTRATOR_MANUAL_GATE_TOKEN_SHA256 is configured."
+        ),
+    )
+    gate_cmd.add_argument(
+        "--approval-token-file",
+        help=(
+            "Read the optional manual-gate proof token from a human-controlled file. "
+            "Use this instead of putting the token in shell history."
+        ),
+    )
 
     status_cmd = subparsers.add_parser("status", help="Show run status and health.")
     status_group = status_cmd.add_mutually_exclusive_group(required=True)
@@ -600,6 +625,7 @@ def main(argv: list[str] | None = None) -> int:
                 decided_by=args.by,
                 note=args.note,
                 evidence_paths=args.evidence_path,
+                approval_token=_manual_gate_approval_token_from_args(args),
             )
             print(json.dumps(result, indent=2))
             return 0

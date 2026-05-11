@@ -336,3 +336,94 @@ class SupervisionRecoveryTests(unittest.TestCase):
 
             self.assertEqual(second.action_kind, "park")
             self.assertEqual(second.next_supervisor_action, "park")
+
+    def test_escalated_budget_is_also_bounded_by_item_when_fingerprint_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            paths, _run_state, _item_state = self._write_run_state(
+                repo_root,
+                "RUN_ESCALATED_ITEM_BUDGET",
+                current_state="ST140_ESCALATED",
+                terminal_state="escalated",
+            )
+
+            self._record_intervention(paths, action_kind="resume_escalated", fingerprint="a" * 64, sequence=1)
+            self._record_intervention(paths, action_kind="resume_escalated", fingerprint="b" * 64, sequence=2)
+
+            decision = classify_recovery(
+                repo_root=repo_root,
+                run_id="RUN_ESCALATED_ITEM_BUDGET",
+                status_summary={"pending_action": {"kind": "escalated", "detail": "Same blocker with regenerated reports."}},
+                doctor_report=_doctor_report(),
+                evidence_inbox_dir=None,
+                explicit_external_evidence_dir=None,
+                max_auto_resume_attempts=2,
+                prior_wait_action_kind=None,
+                initial_resume_requested=False,
+                allow_resume_after_manual_gate=False,
+            )
+
+            self.assertEqual(decision.action_kind, "park")
+            self.assertIn("item", decision.reason)
+
+    def test_passed_segment_with_unfinished_items_is_not_reported_as_full_terminal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            items = [make_item("01", 1), make_item("02", 2)]
+            _paths, run_state, item_state = self._write_run_state(
+                repo_root,
+                "RUN_SEGMENT_PASSED",
+                current_state="ST130_PASSED",
+                terminal_state="passed",
+                items=items,
+                auto_advance=False,
+            )
+            run_state.get_item_state("02").terminal_state = "none"
+            save_run_state(resolve_supervision_paths(repo_root, "RUN_SEGMENT_PASSED").run_root / "run_state.json", run_state)
+
+            decision = classify_recovery(
+                repo_root=repo_root,
+                run_id="RUN_SEGMENT_PASSED",
+                status_summary={"pending_action": None},
+                doctor_report=_doctor_report(),
+                evidence_inbox_dir=None,
+                explicit_external_evidence_dir=None,
+                max_auto_resume_attempts=None,
+                prior_wait_action_kind=None,
+                initial_resume_requested=False,
+                allow_resume_after_manual_gate=False,
+            )
+
+            self.assertEqual(decision.action_kind, "terminal_segment_passed")
+            self.assertEqual(decision.recoverability_class, "segment_passed")
+
+    def test_passed_auto_advance_frontier_resumes_unfinished_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            items = [make_item("01", 1), make_item("02", 2)]
+            _paths, run_state, _item_state = self._write_run_state(
+                repo_root,
+                "RUN_AUTO_FRONTIER",
+                current_state="ST130_PASSED",
+                terminal_state="passed",
+                items=items,
+                auto_advance=True,
+            )
+            run_state.get_item_state("02").terminal_state = "none"
+            save_run_state(resolve_supervision_paths(repo_root, "RUN_AUTO_FRONTIER").run_root / "run_state.json", run_state)
+
+            decision = classify_recovery(
+                repo_root=repo_root,
+                run_id="RUN_AUTO_FRONTIER",
+                status_summary={"pending_action": None},
+                doctor_report=_doctor_report(),
+                evidence_inbox_dir=None,
+                explicit_external_evidence_dir=None,
+                max_auto_resume_attempts=None,
+                prior_wait_action_kind=None,
+                initial_resume_requested=False,
+                allow_resume_after_manual_gate=False,
+            )
+
+            self.assertEqual(decision.action_kind, "resume_saved_run")
+            self.assertEqual(decision.next_supervisor_action, "resume")

@@ -186,6 +186,10 @@ Automatic intervention stays inside these boundaries.
 - widening scope beyond truthful kernel resume semantics
 - inventing a second kernel state machine
 
+The supervised kernel environment is also blocked from calling `mark-manual-gate`
+unless `PLAN_ORCHESTRATOR_ALLOW_MANUAL_GATE_WRITE=1` is deliberately set. Use that
+override only from a reviewed human-held shell, not from a worker-agent session.
+
 ## 11. Manual-gate boundary
 
 `awaiting_human_gate` remains the only human-only stop.
@@ -219,6 +223,10 @@ Because the package preserves the kernel rather than replacing it, automatic pos
 - same blocked item,
 - same escalated item,
 - or run-level continuation through `supervise resume` / resolved auto-advance.
+
+If the current supervised segment passes while later normalized-plan items are still
+unfinished and auto-advance is not enabled, the supervisor records terminal observation
+with a `segment_passed` outcome rather than implying that the whole playbook is done.
 
 If you want full run-level continuation after a saved stop, `supervise resume` is the intended operator entry point.
 

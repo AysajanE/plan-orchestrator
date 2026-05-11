@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 from .validators import (
@@ -30,8 +31,9 @@ def artifact_spec(
     consumers: list[str],
     must_exist: bool,
     description: str,
+    materialization_source_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    return {
+    spec = {
         "logical_name": logical_name,
         "path": str(path),
         "content_type": content_type,
@@ -43,6 +45,12 @@ def artifact_spec(
         "must_exist": must_exist,
         "description": description,
     }
+    if materialization_source_path is not None:
+        # Internal-only hint used when the logical artifact path should remain a
+        # tracked repo path but the bytes must be read from a run-branch
+        # worktree rather than from the operator's current checkout.
+        spec["_materialization_source_path"] = str(materialization_source_path)
+    return spec
 
 
 def _packet_relative_path(logical_name: str, source_path: Path) -> Path:
@@ -57,9 +65,12 @@ def workspace_path_for_artifact(
     path: str | Path,
     storage_class: str,
 ) -> str | None:
-    source = resolve_repo_path(repo_root, path)
     if storage_class == "tracked_repo":
-        return repo_relative_path(repo_root, source)
+        raw_path = Path(path)
+        if raw_path.is_absolute():
+            return repo_relative_path(repo_root, raw_path)
+        return PurePosixPath(raw_path.as_posix().strip("/")).as_posix()
+    source = resolve_repo_path(repo_root, path)
     return _packet_relative_path(logical_name, source).as_posix()
 
 
@@ -69,11 +80,15 @@ def _materialize_packet_copy(
     worktree_root: Path,
     packet_root: Path,
     logical_name: str,
+    logical_path: str | Path,
     source_path: Path,
     storage_class: str,
 ) -> str | None:
     if storage_class == "tracked_repo":
-        return repo_relative_path(repo_root, source_path)
+        raw_path = Path(logical_path)
+        if raw_path.is_absolute():
+            return repo_relative_path(repo_root, raw_path)
+        return PurePosixPath(raw_path.as_posix().strip("/")).as_posix()
 
     target = worktree_root / _packet_relative_path(logical_name, source_path)
     ensure_directory(target.parent)
@@ -105,10 +120,19 @@ def build_artifact_manifest(
 
     artifacts: list[dict[str, Any]] = []
     for spec in artifact_specs:
-        source_path = resolve_repo_path(repo_root, spec["path"])
+        logical_path = spec["path"]
+        source_path = resolve_repo_path(
+            repo_root,
+            spec.get("_materialization_source_path", logical_path),
+        )
         exists = source_path.exists()
         if spec["must_exist"] and not exists:
             raise FileNotFoundError(f"Required artifact is missing: {source_path}")
+
+        if spec["storage_class"] == "tracked_repo" and not Path(logical_path).is_absolute():
+            manifest_path = PurePosixPath(str(logical_path).strip("/")).as_posix()
+        else:
+            manifest_path = repo_relative_path(repo_root, source_path)
 
         workspace_packet_path = None
         sha = None
@@ -118,6 +142,7 @@ def build_artifact_manifest(
                 worktree_root=worktree_root,
                 packet_root=packet_root,
                 logical_name=spec["logical_name"],
+                logical_path=logical_path,
                 source_path=source_path,
                 storage_class=spec["storage_class"],
             )
@@ -125,7 +150,7 @@ def build_artifact_manifest(
 
         entry = {
             "logical_name": spec["logical_name"],
-            "path": repo_relative_path(repo_root, source_path),
+            "path": manifest_path,
             "workspace_packet_path": workspace_packet_path,
             "content_type": spec["content_type"],
             "storage_class": spec["storage_class"],

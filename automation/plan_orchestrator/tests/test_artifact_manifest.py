@@ -84,3 +84,56 @@ class ArtifactManifestTests(unittest.TestCase):
 
             payload = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["item_id"], "01")
+
+    def test_tracked_repo_materialization_uses_worktree_source_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            worktree_root = repo_root / "worktree"
+            packet_root = worktree_root / ".local" / "plan_orchestrator" / "packet"
+            logical_path = "docs/runbooks/created_by_prior_item.md"
+            branch_source = worktree_root / logical_path
+            output_path = (
+                repo_root
+                / ".local"
+                / "automation"
+                / "plan_orchestrator"
+                / "runs"
+                / "RUN1"
+                / "artifact_manifest.json"
+            )
+
+            branch_source.parent.mkdir(parents=True, exist_ok=True)
+            branch_source.write_text("available only from run worktree\n", encoding="utf-8")
+
+            specs = [
+                artifact_spec(
+                    logical_name="branch_created_input",
+                    path=logical_path,
+                    content_type="markdown",
+                    storage_class="tracked_repo",
+                    git_policy="tracked",
+                    trust_level="source_input",
+                    producer="repo",
+                    consumers=["execute"],
+                    must_exist=True,
+                    description="Tracked input created by an earlier run-branch item.",
+                    materialization_source_path=branch_source,
+                )
+            ]
+
+            manifest, _manifest_workspace = build_artifact_manifest(
+                repo_root=repo_root,
+                worktree_root=worktree_root,
+                packet_root=packet_root,
+                run_id="RUN1",
+                item_id="02",
+                attempt_number=1,
+                producer_stage="execute",
+                artifact_specs=specs,
+                output_path=output_path,
+            )
+
+            entry = manifest["artifacts"][0]
+            self.assertEqual(entry["path"], logical_path)
+            self.assertEqual(entry["workspace_packet_path"], logical_path)
+            self.assertEqual(entry["sha256"], compute_path_sha256(branch_source))

@@ -163,6 +163,28 @@ def _count_prior_interventions(
     return count
 
 
+def _count_prior_interventions_for_item(
+    paths: SupervisionPaths,
+    *,
+    action_kind: str,
+    item_id: str | None,
+    terminal_state: str | None,
+) -> int:
+    if item_id is None:
+        return 0
+    count = 0
+    for path in list_intervention_paths(paths):
+        payload = load_intervention(path)
+        if payload.get("action_kind") != action_kind:
+            continue
+        if payload.get("item_id") != item_id:
+            continue
+        if terminal_state is not None and payload.get("terminal_state") != terminal_state:
+            continue
+        count += 1
+    return count
+
+
 def classify_recovery(
     *,
     repo_root: Path,
@@ -384,6 +406,23 @@ def classify_recovery(
             )
 
         retry_budget = DEFAULT_MAX_AUTO_RESUME_ATTEMPTS if max_auto_resume_attempts is None else max_auto_resume_attempts
+        if _count_prior_interventions_for_item(
+            paths,
+            action_kind="resume_escalated",
+            item_id=item_state.item_id,
+            terminal_state="escalated",
+        ) >= retry_budget:
+            return RecoveryDecision(
+                action_kind="park",
+                recoverability_class="non_recoverable",
+                reason="The bounded escalated auto-resume budget is exhausted for this item, even though the latest fingerprint may have changed.",
+                fingerprint=fingerprint,
+                item_id=item_state.item_id,
+                attempt_number=item_state.attempt_number,
+                terminal_state="escalated",
+                pending_action_kind="escalated",
+                next_supervisor_action="park",
+            )
         if _count_prior_interventions(paths, action_kind="resume_escalated", fingerprint=fingerprint) >= retry_budget:
             return RecoveryDecision(
                 action_kind="park",
@@ -423,6 +462,30 @@ def classify_recovery(
         )
 
     if run_state.current_state == "ST130_PASSED":
+        if _has_unfinished_items(run_state):
+            if bool(getattr(run_state.options, "auto_advance", False)):
+                return RecoveryDecision(
+                    action_kind="resume_saved_run",
+                    recoverability_class="recoverable",
+                    reason="The current item passed, but auto-advance intent remains and the normalized plan still has unfinished items.",
+                    fingerprint=None,
+                    item_id=item_state.item_id,
+                    attempt_number=item_state.attempt_number,
+                    terminal_state=item_state.terminal_state,
+                    pending_action_kind=pending_action_kind,
+                    next_supervisor_action="resume",
+                )
+            return RecoveryDecision(
+                action_kind="terminal_segment_passed",
+                recoverability_class="segment_passed",
+                reason="The supervised invocation reached a passed item, but the normalized plan still has unfinished items.",
+                fingerprint=None,
+                item_id=item_state.item_id,
+                attempt_number=item_state.attempt_number,
+                terminal_state=item_state.terminal_state,
+                pending_action_kind=pending_action_kind,
+                next_supervisor_action="terminal_observed",
+            )
         return RecoveryDecision(
             action_kind="terminal_passed",
             recoverability_class="passed",

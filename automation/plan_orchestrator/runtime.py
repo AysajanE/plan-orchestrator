@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -8,6 +10,8 @@ from typing import Any
 from .adapters import PlanAdapter, build_default_adapter
 from .config import (
     CLAUDE_MAX_TURNS_DEFAULT,
+    MANUAL_GATE_ALLOW_AUTOMATION_ENV,
+    MANUAL_GATE_TOKEN_SHA256_ENV,
     RunDirectories,
     assert_clean_agent_environment,
     make_run_id,
@@ -316,6 +320,7 @@ class PlanOrchestrator:
         decided_by: str,
         note: str,
         evidence_paths: list[str],
+        approval_token: str | None = None,
     ) -> dict[str, Any]:
         dirs = resolve_run_directories(self.repo_root, run_id)
         run_state = load_run_state(dirs.run_state_path)
@@ -328,12 +333,17 @@ class PlanOrchestrator:
         if gate["status"] != "pending":
             raise OrchestratorError("Manual gate is not pending.")
 
+        authorization = self._manual_gate_authorization_record(
+            approval_token=approval_token,
+        )
+
         decision_payload = {
             "outcome": decision,
             "decided_at_utc": utc_now_iso(),
             "decided_by": decided_by,
             "note": note,
             "evidence_paths": evidence_paths,
+            "authorization": authorization,
         }
         updated = write_manual_gate_record(
             output_path=manual_gate_path,
@@ -384,8 +394,60 @@ class PlanOrchestrator:
             "run_id": run_state.run_id,
             "item_id": item_state.item_id,
             "decision": updated["status"],
+            "authorization": authorization,
             "current_state": run_state.current_state,
             "run_state_path": repo_relative_path(self.repo_root, dirs.run_state_path),
+        }
+
+    def _manual_gate_authorization_record(
+        self,
+        *,
+        approval_token: str | None,
+    ) -> dict[str, Any]:
+        automation_context = any(
+            os.environ.get(name)
+            for name in (
+                "PLAN_ORCHESTRATOR_STAGE_RUNNER",
+                "PLAN_ORCHESTRATOR_STAGE_TOOL",
+                "PLAN_ORCHESTRATOR_SUPERVISION_ENABLED",
+                "PLAN_ORCHESTRATOR_SUPERVISOR_SESSION_ID",
+                "PLAN_ORCHESTRATOR_KERNEL_INVOCATION_ID",
+            )
+        )
+        automation_write_allowed = os.environ.get(MANUAL_GATE_ALLOW_AUTOMATION_ENV) == "1"
+        if automation_context and not automation_write_allowed:
+            raise OrchestratorError(
+                "Manual gate writes are blocked inside model/supervision automation contexts. "
+                "Record the decision from a human-controlled terminal, or set "
+                f"{MANUAL_GATE_ALLOW_AUTOMATION_ENV}=1 only after explicitly reviewing that boundary."
+            )
+
+        expected_sha = os.environ.get(MANUAL_GATE_TOKEN_SHA256_ENV, "").strip().lower()
+        if expected_sha:
+            if not re.fullmatch(r"[a-f0-9]{64}", expected_sha):
+                raise OrchestratorError(
+                    f"{MANUAL_GATE_TOKEN_SHA256_ENV} must be a SHA-256 hex digest."
+                )
+            if not approval_token:
+                raise OrchestratorError(
+                    "Manual gate approval token is required because "
+                    f"{MANUAL_GATE_TOKEN_SHA256_ENV} is configured."
+                )
+            supplied_sha = hashlib.sha256(approval_token.encode("utf-8")).hexdigest()
+            if supplied_sha != expected_sha:
+                raise OrchestratorError("Manual gate approval token did not match the configured digest.")
+            return {
+                "method": "env_sha256_token",
+                "verified": True,
+                "token_sha256": supplied_sha,
+                "automation_write_allowed": automation_write_allowed,
+            }
+
+        return {
+            "method": "none_configured",
+            "verified": False,
+            "token_sha256": None,
+            "automation_write_allowed": automation_write_allowed,
         }
 
     # -------------------------------
@@ -688,7 +750,10 @@ class PlanOrchestrator:
                 break
             current_item_id = pending.pop(0)
             current_external_evidence_dir = external_evidence_dir if processed == 0 else None
-            self._assert_item_repo_inputs_available(item=plan.get_item(current_item_id))
+            self._assert_item_repo_inputs_available(
+                item=plan.get_item(current_item_id),
+                run_ref=run_state.run_branch_name,
+            )
             try:
                 last_terminal = self._run_item_attempt(
                     plan=plan,
@@ -720,22 +785,27 @@ class PlanOrchestrator:
             check=False,
         )
 
-    def _repo_input_status(self, rel_path: str) -> tuple[bool, bool, bool]:
+    def _repo_path_exists_at_ref(self, *, run_ref: str | None, rel_path: str) -> bool:
+        if not run_ref:
+            return self._git_path_query("ls-files", "--error-unmatch", "--", rel_path).returncode == 0
+        return self._git_path_query("cat-file", "-e", f"{run_ref}:{rel_path}").returncode == 0
+
+    def _repo_input_status(self, rel_path: str, *, run_ref: str | None = None) -> tuple[bool, bool, bool]:
         if Path(rel_path).is_absolute():
             return True, False, Path(rel_path).exists()
 
-        tracked = self._git_path_query("ls-files", "--error-unmatch", "--", rel_path).returncode == 0
+        tracked = self._repo_path_exists_at_ref(run_ref=run_ref or "HEAD", rel_path=rel_path)
         ignored = self._git_path_query("check-ignore", "--quiet", "--", rel_path).returncode == 0
         exists = (self.repo_root / rel_path).exists()
         return tracked, ignored, exists
 
-    def _assert_item_repo_inputs_available(self, *, item: PlanItem) -> None:
+    def _assert_item_repo_inputs_available(self, *, item: PlanItem, run_ref: str | None = None) -> None:
         if not (self.repo_root / ".git").exists():
             return
 
         unresolved: list[tuple[str, str]] = []
         for rel_path in dedupe_preserve_order(item.consult_paths):
-            tracked, ignored, exists = self._repo_input_status(rel_path)
+            tracked, ignored, exists = self._repo_input_status(rel_path, run_ref=run_ref)
             if tracked:
                 continue
 
@@ -893,15 +963,22 @@ class PlanOrchestrator:
             ".diff": "diff",
         }.get(path.suffix.lower(), "other")
 
-    def _tracked_repo_input_specs(self, *, item: PlanItem, consumer_stage: str) -> list[dict[str, Any]]:
+    def _tracked_repo_input_specs(
+        self,
+        *,
+        item: PlanItem,
+        consumer_stage: str,
+        worktree_path: Path | None = None,
+    ) -> list[dict[str, Any]]:
         specs: list[dict[str, Any]] = []
         for index, rel_path in enumerate(dedupe_preserve_order(item.consult_paths), start=1):
-            resolved = resolve_repo_path(self.repo_root, rel_path)
             specs.append(
                 artifact_spec(
                     logical_name=f"consult_input_{index:02d}",
-                    path=resolved,
-                    content_type=self._content_type_for_path(resolved),
+                    path=rel_path,
+                    content_type=self._content_type_for_path(
+                        (worktree_path or self.repo_root) / rel_path,
+                    ),
                     storage_class="tracked_repo",
                     git_policy="tracked",
                     trust_level="source_input",
@@ -909,6 +986,7 @@ class PlanOrchestrator:
                     consumers=[consumer_stage],
                     must_exist=True,
                     description=f"Tracked repo input for item context: {rel_path}",
+                    materialization_source_path=(worktree_path / rel_path) if worktree_path is not None else None,
                 )
             )
         return specs
@@ -1557,7 +1635,11 @@ class PlanOrchestrator:
                 must_exist=True,
                 description="Normalized internal runtime manifest.",
             ),
-            *self._tracked_repo_input_specs(item=item, consumer_stage=stage_name),
+            *self._tracked_repo_input_specs(
+                item=item,
+                consumer_stage=stage_name,
+                worktree_path=worktree_path,
+            ),
         ]
         if external_evidence_copy is not None:
             base_specs.append(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -62,6 +63,20 @@ class CliTests(unittest.TestCase):
         self.assertIn("Show one saved run by id.", rendered)
         self.assertIn("Show every saved run under .local/automation/plan_orchestrator/runs.", rendered)
         self.assertIn("Exit with the reported run health code instead of always returning zero.", rendered)
+
+    def test_mark_manual_gate_help_describes_approval_token_options(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["mark-manual-gate", "--help"])
+
+        rendered = " ".join(stdout.getvalue().split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertIn("--approval-token", rendered)
+        self.assertIn("--approval-token-file", rendered)
 
     def test_doctor_help_describes_scope_and_fix_safe_boundary(self) -> None:
         stdout = io.StringIO()
@@ -381,4 +396,59 @@ class CliTests(unittest.TestCase):
             auto_advance=None,
             max_items=None,
             config_path="ops/runtime-policy.json",
+        )
+
+    def test_mark_manual_gate_reads_approval_token_file(self) -> None:
+        fake_orchestrator = mock.Mock()
+        fake_orchestrator.mark_manual_gate.return_value = {
+            "run_id": "RUN_GATE",
+            "item_id": "01",
+            "decision": "approved",
+            "authorization": {"verified": True},
+            "current_state": "ST130_PASSED",
+            "run_state_path": ".local/automation/plan_orchestrator/runs/RUN_GATE/run_state.json",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            token_path = Path(tmp) / "gate-token.txt"
+            token_path.write_text("secret-token\n", encoding="utf-8")
+            with mock.patch(
+                "automation.plan_orchestrator.cli.resolve_repo_root",
+                return_value=Path("."),
+            ), mock.patch(
+                "automation.plan_orchestrator.cli.PlanOrchestrator",
+                return_value=fake_orchestrator,
+            ):
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    exit_code = cli.main(
+                        [
+                            "mark-manual-gate",
+                            "--run-id",
+                            "RUN_GATE",
+                            "--item",
+                            "01",
+                            "--decision",
+                            "approved",
+                            "--by",
+                            "Reviewer",
+                            "--note",
+                            "Reviewed.",
+                            "--approval-token-file",
+                            token_path.as_posix(),
+                        ]
+                    )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue())["authorization"]["verified"], True)
+        fake_orchestrator.mark_manual_gate.assert_called_once_with(
+            run_id="RUN_GATE",
+            item_id="01",
+            decision="approved",
+            decided_by="Reviewer",
+            note="Reviewed.",
+            evidence_paths=[],
+            approval_token="secret-token",
         )

@@ -103,6 +103,37 @@
         },
         "evidence_paths": {
           "$ref": "#/$defs/string_list"
+        },
+        "authorization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "verified",
+            "token_sha256",
+            "automation_write_allowed"
+          ],
+          "properties": {
+            "method": {
+              "enum": [
+                "none_configured",
+                "env_sha256_token"
+              ]
+            },
+            "verified": {
+              "type": "boolean"
+            },
+            "token_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "automation_write_allowed": {
+              "type": "boolean"
+            }
+          }
         }
       }
     }

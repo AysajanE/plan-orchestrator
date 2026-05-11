@@ -650,7 +650,7 @@ class RunSupervisor:
                     self.paths.run_root / "run_state.json",
                 )
 
-                if decision.action_kind == "terminal_passed":
+                if decision.action_kind in {"terminal_passed", "terminal_segment_passed"}:
                     self._write_heartbeat(
                         claim_class="terminal_observed",
                         kernel_status=kernel_status,
@@ -660,7 +660,9 @@ class RunSupervisor:
                         probe_result=None,
                         rejection_reason=None,
                     )
-                    return self._result("passed")
+                    return self._result(
+                        "segment_passed" if decision.action_kind == "terminal_segment_passed" else "passed"
+                    )
 
                 if decision.action_kind in {"wait_manual_gate", "wait_external_evidence"}:
                     self._prior_wait_action_kind = decision.action_kind

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -9,10 +11,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from automation.plan_orchestrator.config import RunDirectories, make_run_id, resolve_run_directories
+from automation.plan_orchestrator.config import (
+    MANUAL_GATE_TOKEN_SHA256_ENV,
+    RunDirectories,
+    make_run_id,
+    resolve_run_directories,
+)
 from automation.plan_orchestrator.models import NormalizedPlan, PlanItem, RuntimeOptions
 from automation.plan_orchestrator.reporting import write_manual_gate_record
 from automation.plan_orchestrator.runtime import OrchestratorError, PlanOrchestrator
+from automation.plan_orchestrator.supervision_bridge import SUPERVISION_ENABLED_ENV
 from automation.plan_orchestrator.state_machine import StateId
 from automation.plan_orchestrator.state_store import create_run_state, load_run_state, save_run_state
 
@@ -250,6 +258,134 @@ class AutoAdvanceTests(unittest.TestCase):
 
             with self.assertRaisesRegex(OrchestratorError, "untracked"):
                 orchestrator._assert_item_repo_inputs_available(item=item)
+
+    def test_repo_input_guard_accepts_paths_created_on_run_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            tracked_path = repo_root / "docs" / "runbooks" / "policy_note.md"
+            tracked_path.parent.mkdir(parents=True, exist_ok=True)
+            tracked_path.write_text("tracked\n", encoding="utf-8")
+            git_commit_all(repo_root, "seed tracked docs")
+            initial_branch = subprocess.run(
+                ["git", "branch", "--show-current"],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+
+            subprocess.run(["git", "branch", "orchestrator/run/RUN_REF_AWARE"], cwd=repo_root, check=True)
+            subprocess.run(["git", "checkout", "orchestrator/run/RUN_REF_AWARE"], cwd=repo_root, check=True, capture_output=True, text=True)
+            branch_only = repo_root / "docs" / "runbooks" / "created_by_prior_item.md"
+            branch_only.write_text("available only on the run branch\n", encoding="utf-8")
+            git_commit_all(repo_root, "prior item created consult input")
+            subprocess.run(["git", "checkout", initial_branch], cwd=repo_root, check=True, capture_output=True, text=True)
+
+            orchestrator = PlanOrchestrator(repo_root)
+            item = make_item("02", 2)
+            item.consult_paths = ["docs/runbooks/created_by_prior_item.md"]
+
+            orchestrator._assert_item_repo_inputs_available(
+                item=item,
+                run_ref="orchestrator/run/RUN_REF_AWARE",
+            )
+
+    def test_manual_gate_rejects_supervised_automation_context_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            init_git_repo(repo_root)
+            tracked = repo_root / "docs" / "runbooks" / "policy_note.md"
+            tracked.parent.mkdir(parents=True, exist_ok=True)
+            tracked.write_text("base\n", encoding="utf-8")
+            base_ref = git_commit_all(repo_root, "base")
+            subprocess.run(["git", "branch", "orchestrator/run/RUN_GATE_AUTOMATION"], cwd=repo_root, check=True)
+
+            orchestrator = PlanOrchestrator(repo_root)
+            plan = make_plan()
+            plan.get_item("01").manual_gate = {
+                "required": True,
+                "gate_type": "signoff",
+                "gate_reason": "Need signoff.",
+                "required_evidence": ["signed note"],
+            }
+            run_id = "RUN_GATE_AUTOMATION"
+            dirs = resolve_run_directories(repo_root, run_id)
+            run_state = create_run_state(
+                run_id=run_id,
+                adapter_id="markdown_playbook_v1",
+                repo_root=repo_root.as_posix(),
+                playbook_source_path="playbook.md",
+                playbook_source_sha256="f" * 64,
+                normalized_plan_path="normalized_plan.json",
+                base_head_sha=base_ref,
+                run_branch_name="orchestrator/run/RUN_GATE_AUTOMATION",
+                options=make_options(),
+                plan=plan,
+            )
+            run_state.current_state = StateId.ST110_AWAITING_HUMAN_GATE.value
+            run_state.current_item_id = "01"
+            item_state = run_state.get_item_state("01")
+            item_state.state = StateId.ST110_AWAITING_HUMAN_GATE.value
+            item_state.terminal_state = "awaiting_human_gate"
+            item_state.manual_gate_status = "pending"
+            item_state.checkpoint_ref = base_ref
+            item_state.latest_paths.artifact_manifest_path = "items/01/attempt-1/artifact_manifest.json"
+
+            manual_gate_path = dirs.item_control_dir("01", 1) / "manual_gate.json"
+            write_manual_gate_record(
+                output_path=manual_gate_path,
+                run_id=run_id,
+                item_id="01",
+                gate_id="gate_01",
+                gate_type="signoff",
+                status="pending",
+                requested_by="orchestrator",
+                requested_reason="Need signoff.",
+                required_evidence=["signed note"],
+                branch_name=item_state.branch_name,
+                worktree_path=item_state.worktree_path,
+                checkpoint_ref=base_ref,
+                artifact_manifest_path=item_state.latest_paths.artifact_manifest_path,
+                triage_report_path=None,
+                merged_findings_packet_path=None,
+                codex_audit_report_path=None,
+                claude_audit_report_path=None,
+                review_findings=[],
+                decision=None,
+            )
+            item_state.latest_paths.manual_gate_path = manual_gate_path.relative_to(repo_root).as_posix()
+            save_run_state(dirs.run_state_path, run_state)
+
+            with mock.patch.dict(os.environ, {SUPERVISION_ENABLED_ENV: "1"}, clear=False):
+                with self.assertRaisesRegex(OrchestratorError, "Manual gate writes are blocked"):
+                    orchestrator.mark_manual_gate(
+                        run_id=run_id,
+                        item_id="01",
+                        decision="approved",
+                        decided_by="reviewer",
+                        note="Approved.",
+                        evidence_paths=[],
+                    )
+
+    def test_manual_gate_authorization_requires_matching_token_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            orchestrator = PlanOrchestrator(Path(tmp))
+            digest = hashlib.sha256("secret-token".encode("utf-8")).hexdigest()
+
+            with mock.patch.dict(os.environ, {MANUAL_GATE_TOKEN_SHA256_ENV: digest.upper()}, clear=False):
+                with self.assertRaisesRegex(OrchestratorError, "approval token is required"):
+                    orchestrator._manual_gate_authorization_record(approval_token=None)
+
+                with self.assertRaisesRegex(OrchestratorError, "did not match"):
+                    orchestrator._manual_gate_authorization_record(approval_token="wrong-token")
+
+                record = orchestrator._manual_gate_authorization_record(approval_token="secret-token")
+
+            self.assertEqual(record["method"], "env_sha256_token")
+            self.assertEqual(record["verified"], True)
+            self.assertEqual(record["token_sha256"], digest)
+            self.assertEqual(record["automation_write_allowed"], False)
 
     def test_resume_restarts_blocked_external_item_from_fresh_attempt_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
