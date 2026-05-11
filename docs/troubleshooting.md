@@ -80,6 +80,22 @@ python automation/run_plan_orchestrator.py resume \
 
 Or let the supervisor watch `--evidence-inbox-dir` and resume when local evidence appears.
 
+## Symptom: `mark-manual-gate` refuses to write from an automation context
+
+This is expected hardening. Model stages and supervised kernel children should not
+record human decisions. Re-run the command from a human-controlled terminal. If that
+terminal legitimately inherited supervision environment variables, set
+`PLAN_ORCHESTRATOR_ALLOW_MANUAL_GATE_WRITE=1` only for that explicit command.
+
+When `PLAN_ORCHESTRATOR_MANUAL_GATE_TOKEN_SHA256` is configured, also supply the
+human-held token with `--approval-token-file`.
+
+## Symptom: supervised run returned `segment_passed`
+
+This means the current supervised segment passed, but the normalized playbook still
+contains unfinished items and auto-advance was not enabled. Resume under supervision
+when you want to continue the saved run.
+
 ## Symptom: `supervise status` says `attachment_unproven`
 
 This is the fail-closed liveness state.

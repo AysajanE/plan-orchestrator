@@ -254,6 +254,13 @@ Important current limitation:
 - use a human-controlled terminal for the gate write
 - see `docs/operations-book.md` for the deployer protocol and recommended agent wording
 
+Optional local hardening:
+
+- set `PLAN_ORCHESTRATOR_MANUAL_GATE_TOKEN_SHA256` to the SHA-256 digest of a human-held approval token
+- pass the token with `--approval-token-file` from a human-controlled terminal when recording the decision
+- model-stage and supervised kernel environments are denied manual-gate writes unless `PLAN_ORCHESTRATOR_ALLOW_MANUAL_GATE_WRITE=1` is explicitly set
+- this is proof-of-possession hardening, not a replacement for real organization identity or RBAC
+
 When an item ends in `awaiting_human_gate`:
 
 1. inspect the current run,
@@ -270,7 +277,8 @@ python automation/run_plan_orchestrator.py mark-manual-gate \
   --decision approved \
   --by "Reviewer Name" \
   --note "Required review completed." \
-  --evidence-path docs/reviews/signoff.md
+  --evidence-path docs/reviews/signoff.md \
+  --approval-token-file /secure/local/path/manual-gate-token.txt
 ```
 
 ## 9. External evidence workflow
@@ -354,6 +362,7 @@ That means:
 
 - automatic recovery safely resumes the same blocked/external/escalated frontier;
 - manual-gate continuation is automatically resumed only when doing so remains truthful for the current resume semantics;
+- a supervised single-item segment can report `segment_passed` when the item passed but the normalized playbook still has unfinished items;
 - explicit historical `run --items ...` queue intent is **not** reconstructed into a new kernel state machine.
 
 If you want run-level continuation after a saved stop, `supervise resume` is the correct operator entry point.
