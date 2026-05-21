@@ -6,7 +6,11 @@ import unittest
 from pathlib import Path
 
 from automation.plan_orchestrator.adapters import MarkdownPlaybookAdapter
-from automation.plan_orchestrator.playbook_parser import parse_playbook, section_by_number
+from automation.plan_orchestrator.playbook_parser import (
+    extract_repo_paths_from_text,
+    parse_playbook,
+    section_by_number,
+)
 
 
 PLAYBOOK_FIXTURE = textwrap.dedent(
@@ -78,6 +82,12 @@ class PlaybookParserTests(unittest.TestCase):
         section_two = section_by_number(parsed, "2")
         self.assertEqual(section_two["title"], "Ordered Execution Plan")
         self.assertTrue(parsed["sha256"])
+
+    def test_extract_repo_paths_supports_root_level_backticked_files(self) -> None:
+        self.assertEqual(
+            extract_repo_paths_from_text("Update `README.md` and `pyproject.toml`."),
+            ["README.md", "pyproject.toml"],
+        )
 
     def test_parse_playbook_normalizes_numbered_h3_subsections(self) -> None:
         parsed = parse_playbook(self.playbook_path)

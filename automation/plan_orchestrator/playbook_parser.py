@@ -15,6 +15,9 @@ HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
 NUMBERED_TITLE_RE = re.compile(r"^(\d+(?:\.\d+)*)(?:\.)?\s+(.*)$")
 TABLE_SEPARATOR_RE = re.compile(r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
 BACKTICK_PATH_RE = re.compile(r"`([^`]+)`")
+ROOT_FILE_RE = re.compile(
+    r"^(README\.md|CHANGELOG\.md|pyproject\.toml|package\.json|tsconfig\.json|Cargo\.toml|go\.mod|pom\.xml)$"
+)
 PATH_TOKEN_RE = re.compile(
     r"(?<![\w./-])((?:[A-Za-z0-9._-]+/)+(?:[A-Za-z0-9._-]+(?:\.[A-Za-z0-9._-]+)+|[A-Za-z0-9._-]+/))"
 )
@@ -35,8 +38,9 @@ def _parse_pipe_row(raw_line: str) -> list[str]:
 def extract_repo_paths_from_text(text: str) -> list[str]:
     found: list[str] = []
     for value in BACKTICK_PATH_RE.findall(text):
-        if "/" in value:
-            found.append(value.strip())
+        cleaned = value.strip()
+        if "/" in cleaned or ROOT_FILE_RE.match(cleaned):
+            found.append(cleaned)
     for match in PATH_TOKEN_RE.findall(text):
         if "/" in match:
             found.append(match.strip())
