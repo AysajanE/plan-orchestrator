@@ -286,7 +286,39 @@ def _parse_embedded_json_payload(raw_value: Any) -> dict[str, Any]:
         fenced_search = _MARKDOWN_JSON_BLOCK_SEARCH_RE.search(candidate)
         if fenced_search:
             candidate = fenced_search.group(1).strip()
-    return json.loads(candidate)
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        parsed = _extract_embedded_report_object(candidate)
+    if not isinstance(parsed, dict):
+        raise ValidationError("Claude result payload did not contain a JSON object.")
+    return parsed
+
+
+def _decode_json_object_at(text: str, start_index: int) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    try:
+        parsed, _end = decoder.raw_decode(text[start_index:])
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, dict):
+        return parsed
+    return None
+
+
+def _extract_embedded_report_object(text: str) -> dict[str, Any]:
+    for marker in ('{"schema_version"', '{\n  "schema_version"', '{\r\n  "schema_version"'):
+        marker_index = text.find(marker)
+        if marker_index != -1:
+            parsed = _decode_json_object_at(text, marker_index)
+            if parsed is not None:
+                return parsed
+
+    for match in re.finditer(r"\{", text):
+        parsed = _decode_json_object_at(text, match.start())
+        if parsed is not None and ("schema_version" in parsed or parsed.get("auditor") == "claude"):
+            return parsed
+    raise ValidationError("Claude result payload did not contain an embedded schema JSON object.")
 
 
 def _map_claude_finding_category(category: str) -> str:

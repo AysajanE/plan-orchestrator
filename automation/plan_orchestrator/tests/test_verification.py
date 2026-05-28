@@ -465,6 +465,54 @@ class VerificationTests(unittest.TestCase):
             saved = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(saved["summary"], "Structured output wins.")
 
+    def test_run_claude_audit_extracts_unfenced_result_json_after_prose(self) -> None:
+        repo_root = Path(__file__).resolve().parents[3]
+        schema_path = repo_root / "automation" / "plan_orchestrator" / "schemas" / "audit_report.schema.json"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prompt_path = root / "prompt.md"
+            report_path = root / "claude_audit.json"
+            stderr_log = root / "claude.stderr.log"
+            prompt_path.write_text("Audit.\n", encoding="utf-8")
+            report = make_claude_audit_report(summary="Embedded JSON wins.")
+            envelope = {
+                "type": "result",
+                "subtype": "success",
+                "result": (
+                    "I inspected the packet and will now emit the requested JSON.\n\n"
+                    + json.dumps(report, separators=(",", ":"))
+                    + "\n"
+                ),
+            }
+
+            def fake_run_once(**kwargs):
+                Path(kwargs["report_path"]).write_text(json.dumps(envelope), encoding="utf-8")
+                Path(kwargs["stderr_log"]).write_text("", encoding="utf-8")
+                return 0
+
+            with mock.patch("automation.plan_orchestrator.subprocess_runner._require_command"), mock.patch(
+                "automation.plan_orchestrator.subprocess_runner._run_claude_once",
+                side_effect=fake_run_once,
+            ):
+                result = run_claude_audit(
+                    worktree_path=root,
+                    prompt_path=prompt_path,
+                    schema_path=schema_path,
+                    report_path=report_path,
+                    stderr_log=stderr_log,
+                    item_id="01",
+                    attempt_number=1,
+                    model="opus",
+                    effort="max",
+                    max_turns=8,
+                    timeout_sec=60,
+                )
+
+            self.assertEqual(result.report["summary"], "Embedded JSON wins.")
+            saved = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["summary"], "Embedded JSON wins.")
+
     def test_run_claude_audit_sanitizes_shell_and_git_override_env(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         schema_path = repo_root / "automation" / "plan_orchestrator" / "schemas" / "audit_report.schema.json"
