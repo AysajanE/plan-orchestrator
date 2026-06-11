@@ -540,8 +540,9 @@ def _derive_missing_overall_verdict(payload: dict[str, Any]) -> dict[str, Any]:
         verdict = "issues_found"
     else:
         verdict = "inconclusive"
+    # No marker key: the audit schema is additionalProperties:false, so the
+    # derivation must leave only schema-legal keys behind.
     payload["overall_verdict"] = verdict
-    payload["overall_verdict_derived"] = True
     return payload
 
 

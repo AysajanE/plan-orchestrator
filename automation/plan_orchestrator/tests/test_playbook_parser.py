@@ -236,7 +236,7 @@ def test_missing_overall_verdict_derives_fail_closed() -> None:
         {"findings": [{"severity": "high", "title": "x"}], "schema_version": "v1"}
     )
     assert blocked["overall_verdict"] == "blocked"
-    assert blocked["overall_verdict_derived"] is True
+    assert "overall_verdict_derived" not in blocked
 
     issues = _derive_missing_overall_verdict(
         {"findings": [{"severity": "low", "title": "x"}], "schema_version": "v1"}
@@ -248,7 +248,6 @@ def test_missing_overall_verdict_derives_fail_closed() -> None:
 
     explicit = _derive_missing_overall_verdict({"findings": [], "overall_verdict": "pass"})
     assert explicit["overall_verdict"] == "pass"
-    assert "overall_verdict_derived" not in explicit
 
 
 def test_command_cell_preserves_semicolons_inside_quotes() -> None:
