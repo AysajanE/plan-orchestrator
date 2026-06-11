@@ -213,3 +213,17 @@ class PlaybookParserTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "requires at least one required_verification_commands entry"):
             adapter.normalize(parsed, self.playbook_path)
+
+
+def test_command_cell_splits_html_line_breaks() -> None:
+    from automation.plan_orchestrator.adapters.markdown_playbook import MarkdownPlaybookAdapter
+
+    adapter = MarkdownPlaybookAdapter(repo_root=Path('.'))
+    commands = adapter._parse_command_cell(
+        "python scripts/verify.py --json<br>python -m pytest tests/x -q<BR/>echo done"
+    )
+    assert commands == [
+        "python scripts/verify.py --json",
+        "python -m pytest tests/x -q",
+        "echo done",
+    ]

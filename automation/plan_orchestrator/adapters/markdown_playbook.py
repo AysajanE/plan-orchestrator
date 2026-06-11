@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -414,8 +415,13 @@ class MarkdownPlaybookAdapter(BasePlanAdapter):
         return [part for part in raw if part and part.lower() != "none"]
 
     def _parse_command_cell(self, value: str) -> list[str]:
+        # Markdown table cells cannot hold newlines, so generators emit HTML
+        # line breaks between commands; `<br>` is never valid inside a shell
+        # command, making this split purely additive for semicolon-separated
+        # playbooks.
+        normalized = re.sub(r"<br\s*/?>", ";", value, flags=re.I)
         commands: list[str] = []
-        for part in self._split_semicolon_cell(value):
+        for part in self._split_semicolon_cell(normalized):
             stripped = part.strip()
             if stripped.startswith("`") and stripped.endswith("`") and stripped.count("`") == 2:
                 stripped = stripped[1:-1].strip()
