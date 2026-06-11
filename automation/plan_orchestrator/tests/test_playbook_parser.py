@@ -227,3 +227,25 @@ def test_command_cell_splits_html_line_breaks() -> None:
         "python -m pytest tests/x -q",
         "echo done",
     ]
+
+
+def test_missing_overall_verdict_derives_fail_closed() -> None:
+    from automation.plan_orchestrator.subprocess_runner import _derive_missing_overall_verdict
+
+    blocked = _derive_missing_overall_verdict(
+        {"findings": [{"severity": "high", "title": "x"}], "schema_version": "v1"}
+    )
+    assert blocked["overall_verdict"] == "blocked"
+    assert blocked["overall_verdict_derived"] is True
+
+    issues = _derive_missing_overall_verdict(
+        {"findings": [{"severity": "low", "title": "x"}], "schema_version": "v1"}
+    )
+    assert issues["overall_verdict"] == "issues_found"
+
+    clean = _derive_missing_overall_verdict({"findings": [], "schema_version": "v1"})
+    assert clean["overall_verdict"] == "inconclusive"
+
+    explicit = _derive_missing_overall_verdict({"findings": [], "overall_verdict": "pass"})
+    assert explicit["overall_verdict"] == "pass"
+    assert "overall_verdict_derived" not in explicit

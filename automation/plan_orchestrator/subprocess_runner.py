@@ -511,9 +511,38 @@ def _normalize_claude_report(
         return normalized
 
     normalized = _normalize_claude_response_payload(raw_payload["result"])
+    normalized = _derive_missing_overall_verdict(normalized)
     validate_named_schema(schema_path, normalized)
     write_json_atomic(report_path, normalized)
     return normalized
+
+
+def _derive_missing_overall_verdict(payload: dict[str, Any]) -> dict[str, Any]:
+    """Derive a fail-closed overall_verdict when the agent omitted it.
+
+    Agents reliably emit findings but sometimes omit the verdict key. The
+    derivation never synthesizes approval: blocking/high findings -> blocked,
+    any findings -> issues_found, otherwise inconclusive.
+    """
+    if not isinstance(payload, dict) or payload.get("overall_verdict"):
+        return payload
+    if "findings" not in payload:
+        return payload
+    findings = payload.get("findings") or []
+    severities = {
+        str(f.get("severity") or "").lower()
+        for f in findings
+        if isinstance(f, dict)
+    }
+    if severities & {"blocking", "critical", "high"}:
+        verdict = "blocked"
+    elif findings:
+        verdict = "issues_found"
+    else:
+        verdict = "inconclusive"
+    payload["overall_verdict"] = verdict
+    payload["overall_verdict_derived"] = True
+    return payload
 
 
 def run_claude_audit(
