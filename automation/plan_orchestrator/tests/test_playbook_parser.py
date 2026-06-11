@@ -249,3 +249,20 @@ def test_missing_overall_verdict_derives_fail_closed() -> None:
     explicit = _derive_missing_overall_verdict({"findings": [], "overall_verdict": "pass"})
     assert explicit["overall_verdict"] == "pass"
     assert "overall_verdict_derived" not in explicit
+
+
+def test_command_cell_preserves_semicolons_inside_quotes() -> None:
+    from pathlib import Path
+
+    from automation.plan_orchestrator.adapters.markdown_playbook import MarkdownPlaybookAdapter
+
+    adapter = MarkdownPlaybookAdapter(repo_root=Path("."))
+    cell = (
+        "python -c \"from pathlib import Path; lines={l.strip() for l in Path('.gitignore').read_text().splitlines()}; "
+        "assert 'models/' in lines, 'missing'\"<br>python -m pytest tests/model -q"
+    )
+    commands = adapter._parse_command_cell(cell)
+    assert len(commands) == 2
+    assert commands[0].startswith('python -c "from pathlib import Path;')
+    assert commands[0].endswith("'missing'\"")
+    assert commands[1] == "python -m pytest tests/model -q"

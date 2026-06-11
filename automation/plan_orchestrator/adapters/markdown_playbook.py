@@ -414,14 +414,48 @@ class MarkdownPlaybookAdapter(BasePlanAdapter):
         raw = [part.strip() for part in value.split(";")]
         return [part for part in raw if part and part.lower() != "none"]
 
+    @staticmethod
+    def _split_outside_quotes(value: str) -> list[str]:
+        """Split on semicolons that sit outside single/double quotes.
+
+        Verification commands legitimately embed semicolons inside quoted
+        python -c one-liners; tokenizing those produces non-executable
+        fragments (observed live on the S05 .gitignore assertion).
+        """
+        parts: list[str] = []
+        current: list[str] = []
+        quote: str | None = None
+        for ch in value:
+            if quote is not None:
+                current.append(ch)
+                if ch == quote:
+                    quote = None
+                continue
+            if ch in ("'", '"'):
+                quote = ch
+                current.append(ch)
+                continue
+            if ch == ";":
+                parts.append("".join(current))
+                current = []
+                continue
+            current.append(ch)
+        parts.append("".join(current))
+        return parts
+
     def _parse_command_cell(self, value: str) -> list[str]:
         # Markdown table cells cannot hold newlines, so generators emit HTML
         # line breaks between commands; `<br>` is never valid inside a shell
         # command, making this split purely additive for semicolon-separated
-        # playbooks.
+        # playbooks. Splitting is quote-aware so semicolons inside quoted
+        # python -c strings never fragment a command.
         normalized = re.sub(r"<br\s*/?>", ";", value, flags=re.I)
         commands: list[str] = []
-        for part in self._split_semicolon_cell(normalized):
+        for part in (
+            stripped_part.strip()
+            for stripped_part in self._split_outside_quotes(normalized)
+            if stripped_part.strip() and stripped_part.strip().lower() != "none"
+        ):
             stripped = part.strip()
             if stripped.startswith("`") and stripped.endswith("`") and stripped.count("`") == 2:
                 stripped = stripped[1:-1].strip()
